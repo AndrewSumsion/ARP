@@ -9,5 +9,5 @@ add_executable(
     arp.cpp
 )
 
-target_include_directories(arp PUBLIC glfw/include glew/include)
+target_include_directories(arp PUBLIC glfw/include glew/include glm)
 target_link_libraries(arp glfw glew_s)
