@@ -29,7 +29,7 @@ static const char* fragSrc =
 static arp::Pose poseFunction(
     const arp::Pose& original, double dx, double dy,
     double dt,
-    const std::unordered_map<int, double>& keys);
+    arp::KeyTimeFunction keyTime);
 
 static void appCallback(GLFWwindow* window);
 
@@ -133,7 +133,8 @@ static void appCallback(GLFWwindow* window) {
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
         glm::mat4 projection = glm::perspective(0.5f * 3.14159265358979324f, 1.f, 0.1f, 100.f);
-        glm::mat4 view = glm::mat4(pose.orientation) * glm::translate(glm::mat4(1), pose.position);
+        glm::mat4 camera = glm::translate(glm::mat4(1), pose.position) * glm::mat4(pose.orientation);
+        glm::mat4 view = glm::inverse(camera);
         glm::mat4 mvp = projection * view;
 
         program.SetUniformMatrix4("mvp", &mvp[0][0]);
@@ -153,8 +154,8 @@ static void appCallback(GLFWwindow* window) {
         submitInfo.layers.push_back(layer);
 
         arp::submitFrame(submitInfo);
-        int fps = 15;
-        std::this_thread::sleep_for(std::chrono::milliseconds(1000 / fps));
+        double fps = 0.5;
+        std::this_thread::sleep_for(std::chrono::milliseconds((int)(1000 / fps)));
 
         glfwSwapBuffers(window);
         glfwPollEvents();
@@ -163,41 +164,27 @@ static void appCallback(GLFWwindow* window) {
     arp::releaseCursor();
 }
 
-static double positionSpeed = 1;
-static double rotationSpeed = 0.001;
+static double positionSpeed = 10;
+static double rotationSpeed = -0.001;
 
 static arp::Pose poseFunction(
     const arp::Pose& original, double dx, double dy,
     double dt,
-    const std::unordered_map<int, double>& keys) {
+    arp::KeyTimeFunction keyTime) {
 
     arp::Pose result;
-    glm::vec3 euler = glm::eulerAngles(original.orientation);
-
-    glm::vec3 eulerX = glm::vec3(euler.x + dy * rotationSpeed, 0, 0);
-    glm::vec3 eulerY = glm::vec3(0, euler.y + dx * rotationSpeed, 0);
-    result.orientation = glm::quat(eulerX) * glm::quat(eulerY);
+    glm::quat qX = glm::normalize(glm::angleAxis((float)(rotationSpeed * dy), glm::vec3(1, 0, 0)));
+    glm::quat qY = glm::normalize(glm::angleAxis((float)(rotationSpeed * dx), glm::vec3(0, 1, 0)));
+    result.orientation = glm::normalize(qX * qY * original.orientation);
 
     result.position = original.position;
     
-    if(keys.find(GLFW_KEY_D) != keys.end()) {
-        result.position.x += positionSpeed * keys.at(GLFW_KEY_D);
-    }
-    if(keys.find(GLFW_KEY_A) != keys.end()) {
-        result.position.x -= positionSpeed * keys.at(GLFW_KEY_A);
-    }
-    if(keys.find(GLFW_KEY_SPACE) != keys.end()) {
-        result.position.y += positionSpeed * keys.at(GLFW_KEY_SPACE);
-    }
-    if(keys.find(GLFW_KEY_LEFT_SHIFT) != keys.end()) {
-        result.position.y -= positionSpeed * keys.at(GLFW_KEY_LEFT_SHIFT);
-    }
-    if(keys.find(GLFW_KEY_W) != keys.end()) {
-        result.position.z += positionSpeed * keys.at(GLFW_KEY_W);
-    }
-    if(keys.find(GLFW_KEY_S) != keys.end()) {
-        result.position.z -= positionSpeed * keys.at(GLFW_KEY_S);
-    }
+    result.position.x += positionSpeed * keyTime(GLFW_KEY_D);
+    result.position.x -= positionSpeed * keyTime(GLFW_KEY_A);
+    result.position.y += positionSpeed * keyTime(GLFW_KEY_SPACE);
+    result.position.y -= positionSpeed * keyTime(GLFW_KEY_LEFT_SHIFT);
+    result.position.z += positionSpeed * keyTime(GLFW_KEY_W);
+    result.position.z -= positionSpeed * keyTime(GLFW_KEY_S);
 
     return result;
 }

@@ -79,6 +79,12 @@ struct FrameSubmitInfo {
 };
 
 /**
+ * Function pointer type used by PoseFunction. Returns the amount of time the
+ * given key has been pressed since the last frame
+ */
+typedef double (*KeyTimeFunction)(int key);
+
+/**
  * Function pointer type used by the application to specify how camera pose
  * responds to user input. This function MUST have no side effects, as it may
  * be called by reprojection many times for each frame
@@ -92,7 +98,7 @@ struct FrameSubmitInfo {
  */
 typedef Pose (*PoseFunction)(const Pose& original, double dx, double dy,
                              double dt,
-                             const std::unordered_map<int, double>& keys);
+                             KeyTimeFunction keyTime);
 
 /**
  * Applications should implement their main loops in this thread. When

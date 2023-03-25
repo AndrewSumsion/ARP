@@ -24,6 +24,7 @@ static void appThreadStarter(ApplicationCallback callback);
 static void keyCallback(GLFWwindow* window, int key, int scancode, int action, int mods);
 static void setupGL();
 static void compileShader(GLuint shader, const char* source);
+static double keyTimeFunction(int key);
 
 /// Reprojection variables ///
 
@@ -232,8 +233,8 @@ int startReprojection(ApplicationCallback callback) {
         double dy = mouseY - lastMouseY;
         double dt = glfwGetTime() - lastFrameTime;
 
-        Pose renderPose = poseFunction(lastPose, dx, dy, dt, keyTimes);
-        glm::mat4 mv = glm::mat4(renderPose.orientation) * view;
+        Pose renderPose = poseFunction(lastPose, dx, dy, dt, keyTimeFunction);
+        glm::mat4 mv = glm::inverse(glm::mat4(renderPose.orientation)) * view;
         glm::mat4 mvp = projection * mv;
         GLuint mvLoc = glGetUniformLocation(program, "mv");
         glUniformMatrix4fv(mvLoc, 1, GL_FALSE, &mv[0][0]);
@@ -282,7 +283,7 @@ void submitFrame(const FrameSubmitInfo& submitInfo) {
     double time = glfwGetTime();
     double dt = time - lastFrameTime;
 
-    nextPose = poseFunction(nextPose, dx, dy, dt, keyTimes);
+    nextPose = poseFunction(nextPose, dx, dy, dt, keyTimeFunction);
     lastMouseX = mouseX;
     lastMouseY = mouseY;
     lastFrameTime = time;
@@ -391,6 +392,15 @@ static void compileShader(GLuint shader, const char* source) {
 
         std::cout << "Error: failed to compile shader" << std::endl;
         std::cout << infoLog.data() << std::endl;
+    }
+}
+
+static double keyTimeFunction(int key) {
+    if(keyTimes.count(key)) {
+        return keyTimes.at(key);
+    }
+    else {
+        return 0;
     }
 }
 
