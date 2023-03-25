@@ -1,49 +1,16 @@
 #ifndef ARP_H
 #define ARP_H
 
+#define GLFW_INCLUDE_NONE
 #include <GLFW/glfw3.h>
 #include <glm/glm.hpp>
 #include <glm/ext.hpp>
 
 #include <unordered_map>
 #include <cstdint>
-
-/**
- * Example program:
- * 
- * // setup window
- * GLFWwindow* window = ...;
- * 
- * arp::Swapchain swapchain(1920, 1080, 3);
- * arp::updateProjection(0.1, 1000);
- * arp::startReprojection(window);
- * arp::captureCursor();
- * 
- * // arp will forward close events to hidden window
- * while (!glfwWindowShouldClose(window)) {
- *     int swapchainIndex = swapchain.acquireImage();
- *     GLuint texture = swapchain.images[swapchainIndex];
- *     Pose pose = arp::getNextPose();
- *     
- *     // render to texture with view determined by pose ...
- * 
- *     FrameLayer layers[] = {{0}};
- *     layers[0].pose = pose;
- *     layers[0].fov = fov;
- *     layers[0].flags = PARALLAX_ENABLED;
- *     layers[0].swapchain = swapchain;
- *     layers[0].swapchainIndex = swapchainIndex;
- * 
- *     FrameSubmitInfo submitInfo;
- *     submitInfo.numLayers = 1;
- *     submitInfo.layers = layers;
- * 
- *     arp::submitFrame(submitInfo);
- * }
- * 
- * arp::releaseCursor();
- * 
- */
+#include <thread>
+#include <condition_variable>
+#include <mutex>
 
 namespace arp {
 
@@ -63,6 +30,9 @@ class Swapchain {
 private:
     int index;
     bool* acquiredStatus;
+
+    std::condition_variable cond;
+    std::mutex mutex;
 
 public:
     int width;
@@ -96,17 +66,16 @@ enum class FrameLayerFlags : std::uint32_t {
 };
 
 struct FrameLayer {
-    Pose pose;
     double fov;
     FrameLayerFlags flags;
 
-    Swapchain& swapchain;
+    Swapchain* swapchain;
     int swapchainIndex;
 };
 
 struct FrameSubmitInfo {
-    int numLayers;
-    FrameLayer* layers;
+    Pose pose;
+    std::vector<FrameLayer> layers;
 };
 
 /**
@@ -126,6 +95,14 @@ typedef Pose (*PoseFunction)(const Pose& original, double dx, double dy,
                              const std::unordered_map<int, double>& keys);
 
 /**
+ * Applications should implement their main loops in this thread. When
+ * startReprojection is called, reprojection takes over the main thread, and
+ * the application must run on a secondary thread. The provided window argument
+ * is a hidden window with a shared context with the main window.
+ */
+typedef void (*ApplicationCallback)(GLFWwindow* window);
+
+/**
  * Inititalizes the ARP library. Returns 0 on success
  */
 int initialize();
@@ -141,7 +118,7 @@ int initialize();
  * 
  * Returns 0 on success
  */
-int startReprojection(GLFWwindow*& window);
+int startReprojection(ApplicationCallback callback);
 
 /**
  * Registers the function used to determine poses by input
@@ -162,7 +139,7 @@ void releaseCursor();
  * Specify features of the projection
  * The reprojection needs to know this to accurately reproject the scene
  */
-void updateProjection(float near, float far);
+void updateProjection(float near, float far, float fovY, float aspectRatio);
 
 /**
  * Returns the pose that should be used to render the next frame
