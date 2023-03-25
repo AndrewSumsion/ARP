@@ -17,5 +17,5 @@ add_executable(
     test.cpp
 )
 
-target_include_directories(test PUBLIC glfw/include glew/include glm)
+target_include_directories(test PUBLIC glfw/include glew/include glm cyCodeBase)
 target_link_libraries(test arp)

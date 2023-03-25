@@ -39,6 +39,7 @@ static GLFWwindow* hiddenWindow = nullptr;
 
 static std::thread reprojectionThread;
 
+static bool frameValid = false;
 static FrameSubmitInfo lastFrame;
 static double lastFrameTime;
 
@@ -58,17 +59,21 @@ static const char* vertSrc =
     "in vec3 pos;\n"
     "uniform mat4 mvp;\n"
     "uniform mat4 mv;\n"
-    "out float y;\n"
+    "out vec2 texCoords;\n"
     "void main() {\n"
     "    gl_Position = mvp * vec4(pos, 1);\n"
+    "    texCoords = (pos.xy + vec2(1, 1)) * 0.5;\n"
     "}\n"
     ;
 
 static const char* fragSrc =
     "#version 330 core\n"
     "layout(location = 0) out vec4 color;\n"
+    "in vec2 texCoords;\n"
+    "uniform sampler2D tex;\n"
     "void main() {\n"
-    "    color = vec4(1, 0, 0, 1);\n"
+    "    color = texture(tex, texCoords);\n"
+    "    //color = vec4(texCoords, 0, 1);\n"
     "}\n"
     ;
 
@@ -95,6 +100,8 @@ Swapchain::Swapchain(int width, int height, int numImages)
     for(int i = 0; i < numImages; i++) {
         glBindTexture(GL_TEXTURE_2D, images[i]);
         glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, width, height, 0, GL_RGB, GL_UNSIGNED_BYTE, nullptr);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);  
     }
 }
 
@@ -191,7 +198,7 @@ int startReprojection(ApplicationCallback callback) {
     window = glfwGetCurrentContext();
 
     nextPose.position = glm::vec3(0, 0, 0);
-    nextPose.orientation = glm::quat(0, 0, 0, 1);
+    nextPose.orientation = glm::quat(1, 0, 0, 0);
     lastFrame.pose = nextPose;
 
     // start app thread
@@ -238,6 +245,11 @@ int startReprojection(ApplicationCallback callback) {
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
         glUseProgram(program);
+        // TODO: Properly support layers
+        if(frameValid) {
+            GLuint texture = lastFrame.layers[0].swapchain->images[lastFrame.layers[0].swapchainIndex];
+            glBindTexture(GL_TEXTURE_2D, texture);
+        }
         glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
 
         glfwSwapBuffers(window);
@@ -253,6 +265,8 @@ int startReprojection(ApplicationCallback callback) {
 }
 
 void submitFrame(const FrameSubmitInfo& submitInfo) {
+    glFlush();
+
     for(arp::FrameLayer& layer : lastFrame.layers) {
         layer.swapchain->releaseImage(layer.swapchainIndex);
     }
@@ -267,11 +281,11 @@ void submitFrame(const FrameSubmitInfo& submitInfo) {
     double dy = mouseY - lastMouseY;
     double time = glfwGetTime();
     double dt = time - lastFrameTime;
-    lastFrameTime = time;
 
     nextPose = poseFunction(nextPose, dx, dy, dt, keyTimes);
     lastMouseX = mouseX;
     lastMouseY = mouseY;
+    lastFrameTime = time;
 
     keyTimes.clear();
 
@@ -279,6 +293,8 @@ void submitFrame(const FrameSubmitInfo& submitInfo) {
     for(int key : pressedKeys) {
         keyPressTimes[key] = time;
     }
+
+    frameValid = true;
 }
 
 Pose getNextPose() {
