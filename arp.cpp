@@ -47,7 +47,6 @@ static Pose cameraPose;
 
 static bool cursorCaptured = false;
 static std::unordered_map<int, double> keyTimes;
-static std::unordered_map<int, double> keyPressTimes;
 static std::unordered_set<int> pressedKeys;
 
 /// Rendering variables ///
@@ -206,6 +205,9 @@ int startReprojection(ApplicationCallback callback) {
 
     setupGL();
 
+    // absolute time value used for tracking frame time
+    double frameStartTime = glfwGetTime();
+
     while(!glfwWindowShouldClose(window)) {
         if(cursorCaptured) {
             glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
@@ -215,8 +217,10 @@ int startReprojection(ApplicationCallback callback) {
         }
 
         double time = glfwGetTime();
+        double lastFrameDuration = time - frameStartTime;
+        frameStartTime = time;
         for(int key : pressedKeys) {
-            keyTimes[key] = time - keyPressTimes[key];
+            keyTimes[key] += lastFrameDuration;
         }
 
         double mouseX, mouseY;
@@ -288,9 +292,13 @@ static void appThreadStarter(ApplicationCallback callback) {
 }
 
 static void keyCallback(GLFWwindow* window, int key, int scancode, int action, int mods) {
+    if(action == GLFW_PRESS && key == GLFW_KEY_ESCAPE) {
+        cursorCaptured = !cursorCaptured;
+        return;
+    }
+
     if(action == GLFW_PRESS) {
         pressedKeys.insert(key);
-        keyPressTimes[key] = glfwGetTime();
     }
     else if(action == GLFW_RELEASE) {
         pressedKeys.erase(key);
