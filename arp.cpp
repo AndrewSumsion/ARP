@@ -42,13 +42,10 @@ static std::thread reprojectionThread;
 
 static bool frameValid = false;
 static FrameSubmitInfo lastFrame;
-static double lastFrameTime;
 
-static Pose nextPose;
+static Pose cameraPose;
 
 static bool cursorCaptured = false;
-static double lastMouseX = 0;
-static double lastMouseY = 0;
 static std::unordered_map<int, double> keyTimes;
 static std::unordered_map<int, double> keyPressTimes;
 static std::unordered_set<int> pressedKeys;
@@ -198,9 +195,9 @@ int startReprojection(ApplicationCallback callback) {
 
     window = glfwGetCurrentContext();
 
-    nextPose.position = glm::vec3(0, 0, 0);
-    nextPose.orientation = glm::quat(1, 0, 0, 0);
-    lastFrame.pose = nextPose;
+    cameraPose.position = glm::vec3(0, 0, 0);
+    cameraPose.orientation = glm::quat(1, 0, 0, 0);
+    lastFrame.pose = cameraPose;
 
     // start app thread
     reprojectionThread = std::thread(appThreadStarter, callback);
@@ -222,26 +219,19 @@ int startReprojection(ApplicationCallback callback) {
             keyTimes[key] = time - keyPressTimes[key];
         }
 
-        Pose lastPose = lastFrame.pose;
-        // I'm gonna be honest I'm really confused about this part
-        // This is getting the pose based on the difference from
-        // the last submitted pose. I'm not sure if nextPose should
-        // have something to do with this.
         double mouseX, mouseY;
         glfwGetCursorPos(window, &mouseX, &mouseY);
-        double dx = mouseX - lastMouseX;
-        double dy = mouseY - lastMouseY;
-        double dt = glfwGetTime() - lastFrameTime;
 
-        Pose renderPose = poseFunction(lastPose, dx, dy, dt, keyTimeFunction);
-        glm::mat4 mv = glm::inverse(glm::mat4(renderPose.orientation)) * view;
+        cameraPose = poseFunction(mouseX, mouseY, time, keyTimeFunction);
+        // orientationDifference: camera - lastFrame
+        glm::quat orienationDifference = glm::inverse(lastFrame.pose.orientation) * cameraPose.orientation;
+        glm::mat4 mv = glm::mat4(glm::inverse(orienationDifference)) * view;
         glm::mat4 mvp = projection * mv;
         GLuint mvLoc = glGetUniformLocation(program, "mv");
         glUniformMatrix4fv(mvLoc, 1, GL_FALSE, &mv[0][0]);
         GLuint mvpLoc = glGetUniformLocation(program, "mvp");
         glUniformMatrix4fv(mvpLoc, 1, GL_FALSE, &mvp[0][0]);
 
-        // TODO: Draw the plane here
 
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
@@ -272,34 +262,13 @@ void submitFrame(const FrameSubmitInfo& submitInfo) {
         layer.swapchain->releaseImage(layer.swapchainIndex);
     }
 
-    lastFrame.layers = submitInfo.layers;
-
-    // TODO: these should be the exact values provided to the pose function
-    // This is a stopgap hoping they will be extremely close
-    double mouseX, mouseY;
-    glfwGetCursorPos(window, &mouseX, &mouseY);
-    double dx = mouseX - lastMouseX;
-    double dy = mouseY - lastMouseY;
-    double time = glfwGetTime();
-    double dt = time - lastFrameTime;
-
-    nextPose = poseFunction(nextPose, dx, dy, dt, keyTimeFunction);
-    lastMouseX = mouseX;
-    lastMouseY = mouseY;
-    lastFrameTime = time;
-
-    keyTimes.clear();
-
-    // reset key press times to current times to avoid key times going over frame time
-    for(int key : pressedKeys) {
-        keyPressTimes[key] = time;
-    }
+    lastFrame = submitInfo;
 
     frameValid = true;
 }
 
-Pose getNextPose() {
-    return nextPose;
+Pose getCameraPose() {
+    return cameraPose;
 }
 
 void shutdown() {
@@ -396,12 +365,7 @@ static void compileShader(GLuint shader, const char* source) {
 }
 
 static double keyTimeFunction(int key) {
-    if(keyTimes.count(key)) {
-        return keyTimes.at(key);
-    }
-    else {
-        return 0;
-    }
+    return keyTimes[key];
 }
 
 };

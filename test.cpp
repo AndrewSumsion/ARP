@@ -27,8 +27,7 @@ static const char* fragSrc =
     ;
 
 static arp::Pose poseFunction(
-    const arp::Pose& original, double dx, double dy,
-    double dt,
+    double mouseX, double mouseY, double time,
     arp::KeyTimeFunction keyTime);
 
 static void appCallback(GLFWwindow* window);
@@ -122,7 +121,7 @@ static void appCallback(GLFWwindow* window) {
         int swapchainIndex = swapchain.acquireImage();
         GLuint texture = swapchain.images[swapchainIndex];
         glBindTexture(GL_TEXTURE_2D, texture);
-        arp::Pose pose = arp::getNextPose();
+        arp::Pose pose = arp::getCameraPose();
         //std::cout << "x: " << pose.position.x << " y: " << pose.position.y << " z: " << pose.position.z << std::endl;
 
         glm::vec3 euler = glm::eulerAngles(pose.orientation);
@@ -154,7 +153,7 @@ static void appCallback(GLFWwindow* window) {
         submitInfo.layers.push_back(layer);
 
         arp::submitFrame(submitInfo);
-        double fps = 0.5;
+        double fps = 20;
         std::this_thread::sleep_for(std::chrono::milliseconds((int)(1000 / fps)));
 
         glfwSwapBuffers(window);
@@ -168,16 +167,13 @@ static double positionSpeed = 10;
 static double rotationSpeed = -0.001;
 
 static arp::Pose poseFunction(
-    const arp::Pose& original, double dx, double dy,
-    double dt,
-    arp::KeyTimeFunction keyTime) {
+    double mouseX, double mouseY, double time, arp::KeyTimeFunction keyTime) {
 
     arp::Pose result;
-    glm::quat qX = glm::normalize(glm::angleAxis((float)(rotationSpeed * dy), glm::vec3(1, 0, 0)));
-    glm::quat qY = glm::normalize(glm::angleAxis((float)(rotationSpeed * dx), glm::vec3(0, 1, 0)));
-    result.orientation = glm::normalize(qX * qY * original.orientation);
 
-    result.position = original.position;
+    result.orientation = glm::quat(glm::vec3(0, mouseX * rotationSpeed, 0)) * glm::quat(glm::vec3(mouseY * rotationSpeed, 0, 0));
+
+    result.position = glm::vec3(0);
     
     result.position.x += positionSpeed * keyTime(GLFW_KEY_D);
     result.position.x -= positionSpeed * keyTime(GLFW_KEY_A);

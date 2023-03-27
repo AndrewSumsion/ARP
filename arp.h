@@ -89,15 +89,19 @@ typedef double (*KeyTimeFunction)(int key);
  * responds to user input. This function MUST have no side effects, as it may
  * be called by reprojection many times for each frame
  * 
- * original - the last known position that was provided by arp
- * dx - the amount the mouse has moved since that position, x-dir in pixels
- * dy - the amount the mouse has moved since that position, ydir in pixels
- * dt - the amount of time that has passed since that position, in seconds
- * keys - a map of glfw key codes (ints) to the total amount of time (seconds
- *        as a double) that that key has been pressed since the last position
+ * mouseX - Net movement of mouse in the X direction. A value of zero does not
+ *          necessarily correspond to any specific position
+ * mouseY - Net movement of mouse in the Y direction
+ * time - A monotonically increasing timer in seconds. Note that the value may
+ *        not be monotonic from the perspective of this function, as this 
+ *        function may be used for different times in any order. The time
+ *        should never be before the most recently submitted frame.
+ * keyTime - A function that gets the total time a certain key (GLFW int key
+ *           code) has been pressed, returned as a double in seconds
+ * 
+ * Returns the position and orientation of the camera with the given input
  */
-typedef Pose (*PoseFunction)(const Pose& original, double dx, double dy,
-                             double dt,
+typedef Pose (*PoseFunction)(double mouseX, double mouseY, double time,
                              KeyTimeFunction keyTime);
 
 /**
@@ -150,7 +154,7 @@ void updateProjection(float near, float far, float fovY, float aspectRatio);
 /**
  * Returns the pose that should be used to render the next frame
  */
-Pose getNextPose();
+Pose getCameraPose();
 
 /**
  * Submits frame
