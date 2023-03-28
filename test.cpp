@@ -78,14 +78,6 @@ int main(int argc, char *argv[]) {
 
 static void appCallback(GLFWwindow* window) {
     arp::Swapchain swapchain(640, 480, 3);
-    GLuint fbos[3];
-    for(int i = 0; i < 3; i++) {
-        glGenFramebuffers(1, &fbos[i]);
-        glBindFramebuffer(GL_FRAMEBUFFER, fbos[i]);
-        glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, swapchain.images[i], 0);
-        if(glCheckFramebufferStatus(GL_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE)
-	        std::cout << "ERROR::FRAMEBUFFER:: Framebuffer is not complete!" << std::endl;
-    }
 
     cy::TriMesh mesh;
     mesh.LoadFromFileObj(meshPath, false);
@@ -125,6 +117,7 @@ static void appCallback(GLFWwindow* window) {
 
     while(!glfwWindowShouldClose(window)) {
         int swapchainIndex = swapchain.acquireImage();
+        swapchain.bindFramebuffer(swapchainIndex);
         GLuint texture = swapchain.images[swapchainIndex];
         glBindTexture(GL_TEXTURE_2D, texture);
         arp::Pose pose;
@@ -135,7 +128,6 @@ static void appCallback(GLFWwindow* window) {
         glm::vec3 euler = glm::eulerAngles(pose.orientation);
         //std::cout << "x: " << euler.x << " y: " << euler.y << " z: " << euler.z << std::endl;
 
-        glBindFramebuffer(GL_FRAMEBUFFER, fbos[swapchainIndex]);
         glClearColor(0, 0.5, 0.5, 1);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 

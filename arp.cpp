@@ -22,6 +22,7 @@ namespace arp {
 
 static void appThreadStarter(ApplicationCallback callback);
 static void keyCallback(GLFWwindow* window, int key, int scancode, int action, int mods);
+static void framebufferSizeCallback(GLFWwindow* window, int width, int height);
 static void setupGL();
 static void compileShader(GLuint shader, const char* source);
 static double keyTimeFunction(int key);
@@ -51,6 +52,9 @@ static bool cursorCaptured = false;
 static std::mutex keyTimesMutex;
 static std::unordered_map<int, double> keyTimes;
 static std::unordered_set<int> pressedKeys;
+
+static GLFWkeyfun originalKeyCallback;
+static GLFWframebuffersizefun originalFramebufferSizeCallback;
 
 /// Rendering variables ///
 
@@ -82,54 +86,97 @@ glm::mat4 projection;
 glm::mat4 view;
 
 Swapchain::Swapchain(int width, int height, int numImages)
-  : width(width), height(height), numImages(numImages), index(0)
+  : width(width),
+    height(height),
+    numImages(numImages),
+    index(0),
+    acquiredStatus(numImages),
+    fbos(numImages),
+    images(numImages),
+    depthImages(numImages)
 {
     if(!initialized) {
         std::cout << "Error: Attempting to create swapchain before initialization!" << std::endl;
         return;
     }
 
-    acquiredStatus = new bool[numImages];
     for(int i = 0; i < numImages; i++) {
-        acquiredStatus[i] = false;
+        acquiredStatus[i] = 0;
     }
 
-    images = new uint32_t[numImages];
-    glGenTextures(numImages, images);
-
+    glGenTextures(numImages, images.data());
     for(int i = 0; i < numImages; i++) {
         glBindTexture(GL_TEXTURE_2D, images[i]);
         glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, width, height, 0, GL_RGB, GL_UNSIGNED_BYTE, nullptr);
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);  
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
     }
+
+    glGenTextures(numImages, depthImages.data());
+    for(int i = 0; i < numImages; i++) {
+        glBindTexture(GL_TEXTURE_2D, depthImages[i]);
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_DEPTH_COMPONENT24, width, height, 0, GL_DEPTH_COMPONENT, GL_FLOAT, 0);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+        glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+    }
+
+    GLuint originalFramebuffer;
+    glGetIntegerv(GL_DRAW_FRAMEBUFFER_BINDING, (GLint*)&originalFramebuffer);
+
+    glGenFramebuffers(numImages, fbos.data());
+    for(int i = 0; i < numImages; i++)  {
+        glBindFramebuffer(GL_DRAW_FRAMEBUFFER, fbos[i]);
+        glFramebufferTexture2D(GL_DRAW_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, images[i], 0);
+        glFramebufferTexture2D(GL_DRAW_FRAMEBUFFER, GL_DEPTH_ATTACHMENT, GL_TEXTURE_2D, depthImages[i], 0);
+        if(glCheckFramebufferStatus(GL_DRAW_FRAMEBUFFER) != GL_FRAMEBUFFER_COMPLETE) {
+            std::cout << "Creating swapchain: Framebuffer incomplete! ";
+            std::cout << glCheckFramebufferStatus(GL_DRAW_FRAMEBUFFER) << std::endl;
+        }
+    }
+
+    glBindFramebuffer(GL_DRAW_FRAMEBUFFER, originalFramebuffer);
 }
 
 Swapchain::~Swapchain() {
-    delete[] acquiredStatus;
-    glDeleteTextures(numImages, images);
-    delete[] images;
+    glDeleteTextures(numImages, images.data());
+    glDeleteTextures(numImages, depthImages.data());
+    glDeleteFramebuffers(numImages, fbos.data());
 }
 
 int Swapchain::acquireImage() {
     // block until image is not acquired
-    if(acquiredStatus[index] == true) {
+    if(acquiredStatus[index]) {
         std::unique_lock<std::mutex> lock(mutex);
-        while(acquiredStatus[index] == true) {
+        while(acquiredStatus[index]) {
             cond.wait(lock);
         }
         lock.unlock();
     }
 
     int i = index;
-    acquiredStatus[i] = true;
+    acquiredStatus[i] = 1;
     index = (index + 1) % numImages;
     return i;
 }
 
+void Swapchain::bindFramebuffer(int index) {
+    glBindFramebuffer(GL_FRAMEBUFFER, fbos[index]);
+}
+
+void Swapchain::resize(int width, int height) {
+    this->width = width;
+    this->height = height;
+    for(int i = 0; i < numImages; i++) {
+        glBindTexture(GL_TEXTURE_2D, images[i]);
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, width, height, 0, GL_RGB, GL_UNSIGNED_BYTE, nullptr);
+        glBindTexture(GL_TEXTURE_2D, depthImages[i]);
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_DEPTH_COMPONENT24, width, height, 0, GL_RED, GL_UNSIGNED_BYTE, nullptr);
+    }
+}
+
 void Swapchain::releaseImage(int i) {
     std::lock_guard<std::mutex> lock(mutex);
-    acquiredStatus[i] = false;
+    acquiredStatus[i] = 0;
     cond.notify_all();
 }
 
@@ -204,7 +251,8 @@ int startReprojection(ApplicationCallback callback) {
     // start app thread
     reprojectionThread = std::thread(appThreadStarter, callback);
 
-    glfwSetKeyCallback(window, keyCallback);
+    originalKeyCallback = glfwSetKeyCallback(window, keyCallback);
+    originalFramebufferSizeCallback = glfwSetFramebufferSizeCallback(window, framebufferSizeCallback);
 
     setupGL();
 
@@ -320,17 +368,21 @@ static void appThreadStarter(ApplicationCallback callback) {
 }
 
 static void keyCallback(GLFWwindow* window, int key, int scancode, int action, int mods) {
-    if(action == GLFW_PRESS && key == GLFW_KEY_ESCAPE) {
-        cursorCaptured = !cursorCaptured;
-        return;
-    }
-
     if(action == GLFW_PRESS) {
         pressedKeys.insert(key);
     }
     else if(action == GLFW_RELEASE) {
         pressedKeys.erase(key);
     }
+
+    if(originalKeyCallback)
+        originalKeyCallback(window, key, scancode, action, mods);
+}
+
+static void framebufferSizeCallback(GLFWwindow* window, int width, int height) {
+    glViewport(0, 0, width, height);
+    if(originalFramebufferSizeCallback)
+        originalFramebufferSizeCallback(window, width, height);
 }
 
 static void setupGL() {

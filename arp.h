@@ -22,8 +22,6 @@ namespace arp {
  * define ARP_CUSTOM_POSE_DATA before including
  */
 struct Pose {
-    glm::vec3 position;
-    glm::quat orientation;
     union {
         unsigned char dataRaw[64];
         #ifdef ARP_CUSTOM_POSE_DATA
@@ -31,6 +29,8 @@ struct Pose {
         PoseData data;
         #endif
     };
+    glm::vec3 position;
+    glm::quat orientation;
 };
 
 /**
@@ -49,7 +49,8 @@ struct PoseInfo {
 class Swapchain {
 private:
     int index;
-    bool* acquiredStatus;
+    std::vector<std::uint8_t> acquiredStatus;
+    std::vector<std::uint32_t> fbos;
 
     std::condition_variable cond;
     std::mutex mutex;
@@ -58,7 +59,8 @@ public:
     int width;
     int height;
     int numImages;
-    std::uint32_t* images;
+    std::vector<std::uint32_t> images;
+    std::vector<std::uint32_t> depthImages;
 
     Swapchain(int width, int height, int numImages);
     ~Swapchain();
@@ -69,6 +71,17 @@ public:
      * This method will block if there are no images available.
      */
     int acquireImage();
+
+    /**
+     * This method binds the framebuffer to draw on the image of the specified
+     * index and sets the glViewport accordingly
+     */
+    void bindFramebuffer(int index);
+
+    /**
+     * Resizes the texture images in the swapchain
+     */
+    void resize(int width, int height);
 
     /**
      * Used by reprojection when it is finished with an image.
