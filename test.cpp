@@ -160,7 +160,7 @@ static void appCallback(GLFWwindow* window) {
         submitInfo.layers.push_back(layer);
 
         arp::submitFrame(submitInfo);
-        double fps = 5;
+        double fps = 30;
         std::this_thread::sleep_for(std::chrono::milliseconds((int)(1000 / fps)));
 
         glfwSwapBuffers(window);
@@ -185,12 +185,17 @@ static arp::Pose poseFunction(
 
     result.position = lastPose.position;
     
-    result.position.x += positionSpeed * keyTime(GLFW_KEY_D);
-    result.position.x -= positionSpeed * keyTime(GLFW_KEY_A);
+    glm::vec3 movement(0);
+    movement.x += positionSpeed * keyTime(GLFW_KEY_D);
+    movement.x -= positionSpeed * keyTime(GLFW_KEY_A);
+    movement.z += positionSpeed * keyTime(GLFW_KEY_S);
+    movement.z -= positionSpeed * keyTime(GLFW_KEY_W);
+    
+    movement = glm::rotate(glm::mat4(1), (float)result.data.rotationY, glm::vec3(0.f, 1.f, 0.f)) * glm::vec4(movement, 1);
+    result.position += movement;
+
     result.position.y += positionSpeed * keyTime(GLFW_KEY_SPACE);
     result.position.y -= positionSpeed * keyTime(GLFW_KEY_LEFT_SHIFT);
-    result.position.z += positionSpeed * keyTime(GLFW_KEY_W);
-    result.position.z -= positionSpeed * keyTime(GLFW_KEY_S);
 
     return result;
 }
