@@ -296,6 +296,11 @@ int startReprojection(ApplicationCallback callback) {
             double dy = cameraPoseInfo.mouseY - lastFrame.poseInfo.mouseY;
             double dt = cameraPoseInfo.time   - lastFrame.poseInfo.time;
 
+            if(!cursorCaptured) {
+                dx = 0;
+                dy = 0;
+            }
+
             cameraPose = poseFunction(lastFrame.pose, dx, dy, dt, keyTimeFunction);
             orientationDifference = glm::inverse(lastFrame.pose.orientation) * cameraPose.orientation;
         }

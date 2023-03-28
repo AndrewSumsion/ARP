@@ -40,6 +40,8 @@ static void appCallback(GLFWwindow* window);
 
 static void keyCallback(GLFWwindow* window, int key, int scancode, int action, int mods);
 static void framebufferSizeCallback(GLFWwindow* window, int width, int height);
+static void windowFocusCallback(GLFWwindow* window, int focused);
+static void mouseButtonCallback(GLFWwindow* window, int button, int action, int mods);
 
 static const char* meshPath;
 static arp::Swapchain* swapchain;
@@ -71,6 +73,8 @@ int main(int argc, char *argv[]) {
 
     glfwSetKeyCallback(window, keyCallback);
     glfwSetFramebufferSizeCallback(window, framebufferSizeCallback);
+    glfwSetWindowFocusCallback(window, windowFocusCallback);
+    glfwSetMouseButtonCallback(window, mouseButtonCallback);
 
     if(arp::initialize() != 0) {
         std::cout << "Unable to initialize arp" << std::endl;
@@ -156,7 +160,7 @@ static void appCallback(GLFWwindow* window) {
         submitInfo.layers.push_back(layer);
 
         arp::submitFrame(submitInfo);
-        double fps = 20;
+        double fps = 5;
         std::this_thread::sleep_for(std::chrono::milliseconds((int)(1000 / fps)));
 
         glfwSwapBuffers(window);
@@ -199,4 +203,16 @@ static void keyCallback(GLFWwindow* window, int key, int scancode, int action, i
 
 static void framebufferSizeCallback(GLFWwindow* window, int width, int height) {
     swapchain->resize(width, height);
+}
+
+static void windowFocusCallback(GLFWwindow* window, int focused) {
+    if(focused) {
+        arp::captureCursor();
+    }
+}
+
+static void mouseButtonCallback(GLFWwindow* window, int button, int action, int mods) {
+    if(action == GLFW_PRESS) {
+        arp::captureCursor();
+    }
 }
