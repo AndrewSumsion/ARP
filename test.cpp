@@ -183,7 +183,7 @@ static arp::Pose poseFunction(
 
     result.data.rotationX = lastPose.data.rotationX + rotationSpeed * dy;
     result.data.rotationY = lastPose.data.rotationY + rotationSpeed * dx;
-    result.orientation = glm::quat(glm::vec3(result.data.rotationX, 0, 0)) * glm::quat(glm::vec3(0, result.data.rotationY, 0));
+    result.orientation = glm::quat(glm::vec3(0, result.data.rotationY, 0)) * glm::quat(glm::vec3(result.data.rotationX, 0, 0));
 
     result.position = lastPose.position;
     
