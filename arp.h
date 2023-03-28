@@ -16,10 +16,30 @@ namespace arp {
 
 /**
  * Represents the position and orientation of a camera
+ * 
+ * If you would like to specify custom info to track with poses (such as pitch/
+ * yaw), define a struct called PoseData that is less than 64 bytes in size and
+ * define ARP_CUSTOM_POSE_DATA before including
  */
 struct Pose {
     glm::vec3 position;
     glm::quat orientation;
+    union {
+        unsigned char dataRaw[64];
+        #ifdef ARP_CUSTOM_POSE_DATA
+        static_assert(sizeof(PoseData) <= 64, "Custom PoseData must be smaller than 64 bytes");
+        PoseData data;
+        #endif
+    };
+};
+
+/**
+ * Contains absolute input info that was used to generate a pose
+ */
+struct PoseInfo {
+    double mouseX;
+    double mouseY;
+    double time;
 };
 
 /**
@@ -75,6 +95,7 @@ struct FrameLayer {
 
 struct FrameSubmitInfo {
     Pose pose;
+    PoseInfo poseInfo;
     std::vector<FrameLayer> layers;
 };
 
@@ -101,8 +122,8 @@ typedef double (*KeyTimeFunction)(int key);
  * 
  * Returns the position and orientation of the camera with the given input
  */
-typedef Pose (*PoseFunction)(double mouseX, double mouseY, double time,
-                             KeyTimeFunction keyTime);
+typedef Pose (*PoseFunction)(const Pose& lastPose, double dx, double dy,
+                             double dt, KeyTimeFunction keyTime);
 
 /**
  * Applications should implement their main loops in this thread. When
@@ -154,7 +175,7 @@ void updateProjection(float near, float far, float fovY, float aspectRatio);
 /**
  * Returns the pose that should be used to render the next frame
  */
-Pose getCameraPose();
+void getCameraPose(Pose& pose, PoseInfo& poseInfo);
 
 /**
  * Submits frame

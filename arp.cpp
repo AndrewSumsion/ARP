@@ -40,12 +40,15 @@ static GLFWwindow* hiddenWindow = nullptr;
 
 static std::thread reprojectionThread;
 
+static std::mutex posesMutex;
 static bool frameValid = false;
 static FrameSubmitInfo lastFrame;
 
 static Pose cameraPose;
+static PoseInfo cameraPoseInfo{0};
 
 static bool cursorCaptured = false;
+static std::mutex keyTimesMutex;
 static std::unordered_map<int, double> keyTimes;
 static std::unordered_set<int> pressedKeys;
 
@@ -216,20 +219,35 @@ int startReprojection(ApplicationCallback callback) {
             glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_NORMAL);
         }
 
+        glm::quat orientationDifference;
+
         double time = glfwGetTime();
         double lastFrameDuration = time - frameStartTime;
         frameStartTime = time;
-        for(int key : pressedKeys) {
-            keyTimes[key] += lastFrameDuration;
+        {
+            std::lock_guard<std::mutex> keyTimesLock(keyTimesMutex);
+            std::lock_guard<std::mutex> posesLock(posesMutex);
+            for(int key : pressedKeys) {
+                keyTimes[key] += lastFrameDuration;
+            }
+        
+
+            // submitFrame sets last* variables
+            double mouseX, mouseY;
+            glfwGetCursorPos(window, &mouseX, &mouseY);
+            cameraPoseInfo.mouseX = mouseX;
+            cameraPoseInfo.mouseY = mouseY;
+            cameraPoseInfo.time = time;
+
+            double dx = cameraPoseInfo.mouseX - lastFrame.poseInfo.mouseX;
+            double dy = cameraPoseInfo.mouseY - lastFrame.poseInfo.mouseY;
+            double dt = cameraPoseInfo.time   - lastFrame.poseInfo.time;
+
+            cameraPose = poseFunction(lastFrame.pose, dx, dy, dt, keyTimeFunction);
+            orientationDifference = glm::inverse(lastFrame.pose.orientation) * cameraPose.orientation;
         }
-
-        double mouseX, mouseY;
-        glfwGetCursorPos(window, &mouseX, &mouseY);
-
-        cameraPose = poseFunction(mouseX, mouseY, time, keyTimeFunction);
         // orientationDifference: camera - lastFrame
-        glm::quat orienationDifference = glm::inverse(lastFrame.pose.orientation) * cameraPose.orientation;
-        glm::mat4 mv = glm::mat4(glm::inverse(orienationDifference)) * view;
+        glm::mat4 mv = glm::mat4(glm::inverse(orientationDifference)) * view;
         glm::mat4 mvp = projection * mv;
         GLuint mvLoc = glGetUniformLocation(program, "mv");
         glUniformMatrix4fv(mvLoc, 1, GL_FALSE, &mv[0][0]);
@@ -266,13 +284,23 @@ void submitFrame(const FrameSubmitInfo& submitInfo) {
         layer.swapchain->releaseImage(layer.swapchainIndex);
     }
 
-    lastFrame = submitInfo;
+    {
+        std::lock_guard<std::mutex> posesLock(posesMutex);
+        lastFrame = submitInfo;
+    }
+
+    {
+        std::lock_guard<std::mutex> lock(keyTimesMutex);
+        keyTimes.clear();
+    }
 
     frameValid = true;
 }
 
-Pose getCameraPose() {
-    return cameraPose;
+void getCameraPose(Pose& pose, PoseInfo& poseInfo) {
+    std::lock_guard<std::mutex> posesLock(posesMutex);
+    pose = cameraPose;
+    poseInfo = cameraPoseInfo;
 }
 
 void shutdown() {

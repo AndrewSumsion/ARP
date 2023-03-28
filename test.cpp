@@ -1,7 +1,13 @@
-#include "arp.h"
 #include <GL/glew.h>
 #include <cyGL.h>
 #include <cyTriMesh.h>
+
+struct PoseData {
+    double rotationX;
+    double rotationY;
+};
+#define ARP_CUSTOM_POSE_DATA
+#include "arp.h"
 
 #include <iostream>
 #include <chrono>
@@ -27,7 +33,7 @@ static const char* fragSrc =
     ;
 
 static arp::Pose poseFunction(
-    double mouseX, double mouseY, double time,
+    const arp::Pose& lastPose, double dx, double dy, double dt,
     arp::KeyTimeFunction keyTime);
 
 static void appCallback(GLFWwindow* window);
@@ -121,7 +127,9 @@ static void appCallback(GLFWwindow* window) {
         int swapchainIndex = swapchain.acquireImage();
         GLuint texture = swapchain.images[swapchainIndex];
         glBindTexture(GL_TEXTURE_2D, texture);
-        arp::Pose pose = arp::getCameraPose();
+        arp::Pose pose;
+        arp::PoseInfo poseInfo;
+        arp::getCameraPose(pose, poseInfo);
         //std::cout << "x: " << pose.position.x << " y: " << pose.position.y << " z: " << pose.position.z << std::endl;
 
         glm::vec3 euler = glm::eulerAngles(pose.orientation);
@@ -143,6 +151,7 @@ static void appCallback(GLFWwindow* window) {
 
         arp::FrameSubmitInfo submitInfo;
         submitInfo.pose = pose;
+        submitInfo.poseInfo = poseInfo;
 
         arp::FrameLayer layer;
         layer.flags = arp::FrameLayerFlags::NONE;
@@ -167,13 +176,16 @@ static double positionSpeed = 10;
 static double rotationSpeed = -0.001;
 
 static arp::Pose poseFunction(
-    double mouseX, double mouseY, double time, arp::KeyTimeFunction keyTime) {
+    const arp::Pose& lastPose, double dx, double dy, double dt,
+    arp::KeyTimeFunction keyTime) {
 
     arp::Pose result;
 
-    result.orientation = glm::quat(glm::vec3(0, mouseX * rotationSpeed, 0)) * glm::quat(glm::vec3(mouseY * rotationSpeed, 0, 0));
+    result.data.rotationX = lastPose.data.rotationX + rotationSpeed * dy;
+    result.data.rotationY = lastPose.data.rotationY + rotationSpeed * dx;
+    result.orientation = glm::quat(glm::vec3(result.data.rotationX, 0, 0)) * glm::quat(glm::vec3(0, result.data.rotationY, 0));
 
-    result.position = glm::vec3(0);
+    result.position = lastPose.position;
     
     result.position.x += positionSpeed * keyTime(GLFW_KEY_D);
     result.position.x -= positionSpeed * keyTime(GLFW_KEY_A);
