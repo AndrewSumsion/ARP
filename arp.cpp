@@ -143,6 +143,10 @@ Swapchain::~Swapchain() {
     glDeleteFramebuffers(numImages, fbos.data());
 }
 
+void Swapchain::createTextures() {
+
+}
+
 int Swapchain::acquireImage() {
     // block until image is not acquired
     if(acquiredStatus[index]) {
@@ -163,14 +167,15 @@ void Swapchain::bindFramebuffer(int index) {
     glBindFramebuffer(GL_FRAMEBUFFER, fbos[index]);
 }
 
-void Swapchain::resize(int width, int height) {
-    this->width = width;
-    this->height = height;
+void Swapchain::resize(int newWidth, int newHeight) {
+    std::lock_guard<std::mutex> lock(mutex);
+    this->width = newWidth;
+    this->height = newHeight;
     for(int i = 0; i < numImages; i++) {
         glBindTexture(GL_TEXTURE_2D, images[i]);
         glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, width, height, 0, GL_RGB, GL_UNSIGNED_BYTE, nullptr);
         glBindTexture(GL_TEXTURE_2D, depthImages[i]);
-        glTexImage2D(GL_TEXTURE_2D, 0, GL_DEPTH_COMPONENT24, width, height, 0, GL_RED, GL_UNSIGNED_BYTE, nullptr);
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_DEPTH_COMPONENT24, width, height, 0, GL_DEPTH_COMPONENT, GL_FLOAT, 0);
     }
 }
 
@@ -381,8 +386,9 @@ static void keyCallback(GLFWwindow* window, int key, int scancode, int action, i
 
 static void framebufferSizeCallback(GLFWwindow* window, int width, int height) {
     glViewport(0, 0, width, height);
-    if(originalFramebufferSizeCallback)
+    if(originalFramebufferSizeCallback) {
         originalFramebufferSizeCallback(window, width, height);
+    }
 }
 
 static void setupGL() {

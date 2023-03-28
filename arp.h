@@ -55,6 +55,8 @@ private:
     std::condition_variable cond;
     std::mutex mutex;
 
+    void createTextures();
+
 public:
     int width;
     int height;

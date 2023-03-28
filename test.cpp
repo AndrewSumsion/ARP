@@ -38,7 +38,12 @@ static arp::Pose poseFunction(
 
 static void appCallback(GLFWwindow* window);
 
+static void keyCallback(GLFWwindow* window, int key, int scancode, int action, int mods);
+static void framebufferSizeCallback(GLFWwindow* window, int width, int height);
+
 static const char* meshPath;
+static arp::Swapchain* swapchain;
+static double aspectRatio = 1;
 
 int main(int argc, char *argv[]) {
     if(argc != 2) {
@@ -64,20 +69,23 @@ int main(int argc, char *argv[]) {
         return -1;
     }
 
+    glfwSetKeyCallback(window, keyCallback);
+    glfwSetFramebufferSizeCallback(window, framebufferSizeCallback);
+
     if(arp::initialize() != 0) {
         std::cout << "Unable to initialize arp" << std::endl;
         return -1;
     }
 
     arp::registerPoseFunction(poseFunction);
-    arp::updateProjection(0.1, 100, 90 * 3.14159265358979324 / 180, 1);
+    arp::updateProjection(0.1, 100, 90 * 3.14159265358979324 / 180, aspectRatio);
     arp::startReprojection(appCallback);
 
     // arp has taken over this thread and blocks until program is over
 }
 
 static void appCallback(GLFWwindow* window) {
-    arp::Swapchain swapchain(640, 480, 3);
+    swapchain = new arp::Swapchain(640, 480, 3);
 
     cy::TriMesh mesh;
     mesh.LoadFromFileObj(meshPath, false);
@@ -111,27 +119,21 @@ static void appCallback(GLFWwindow* window) {
     glBindBuffer(GL_ARRAY_BUFFER, vbo);
     glVertexAttribPointer(posLoc, 3, GL_FLOAT, GL_FALSE, 0, (GLvoid*)0);
 
-    glViewport(0, 0, swapchain.width, swapchain.height);
-
     arp::captureCursor();
 
     while(!glfwWindowShouldClose(window)) {
-        int swapchainIndex = swapchain.acquireImage();
-        swapchain.bindFramebuffer(swapchainIndex);
-        GLuint texture = swapchain.images[swapchainIndex];
-        glBindTexture(GL_TEXTURE_2D, texture);
+        int swapchainIndex = swapchain->acquireImage();
+        swapchain->bindFramebuffer(swapchainIndex);
+
         arp::Pose pose;
         arp::PoseInfo poseInfo;
         arp::getCameraPose(pose, poseInfo);
-        //std::cout << "x: " << pose.position.x << " y: " << pose.position.y << " z: " << pose.position.z << std::endl;
 
-        glm::vec3 euler = glm::eulerAngles(pose.orientation);
-        //std::cout << "x: " << euler.x << " y: " << euler.y << " z: " << euler.z << std::endl;
-
+        glViewport(0, 0, swapchain->width, swapchain->height);
         glClearColor(0, 0.5, 0.5, 1);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-        glm::mat4 projection = glm::perspective(0.5f * 3.14159265358979324f, 1.f, 0.1f, 100.f);
+        glm::mat4 projection = glm::perspective(0.5f * 3.14159265358979324f, (float)aspectRatio, 0.1f, 100.f);
         glm::mat4 camera = glm::translate(glm::mat4(1), pose.position) * glm::mat4(pose.orientation);
         glm::mat4 view = glm::inverse(camera);
         glm::mat4 mvp = projection * view;
@@ -148,7 +150,7 @@ static void appCallback(GLFWwindow* window) {
         arp::FrameLayer layer;
         layer.flags = arp::FrameLayerFlags::NONE;
         layer.fov = 3.14159265358979324 / 2;
-        layer.swapchain = &swapchain;
+        layer.swapchain = swapchain;
         layer.swapchainIndex = swapchainIndex;
 
         submitInfo.layers.push_back(layer);
@@ -187,4 +189,14 @@ static arp::Pose poseFunction(
     result.position.z -= positionSpeed * keyTime(GLFW_KEY_S);
 
     return result;
+}
+
+static void keyCallback(GLFWwindow* window, int key, int scancode, int action, int mods) {
+    if(key == GLFW_KEY_ESCAPE && action == GLFW_PRESS) {
+        arp::releaseCursor();
+    }
+}
+
+static void framebufferSizeCallback(GLFWwindow* window, int width, int height) {
+    swapchain->resize(width, height);
 }
