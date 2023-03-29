@@ -18,17 +18,21 @@ struct PoseData {
 static const char* vertSrc =
     "#version 330 core\n"
     "layout(location = 0) in vec3 pos;\n"
+    "layout(location = 1) in vec3 normal;\n"
     "uniform mat4 mvp;\n"
+    "out vec3 norm;\n"
     "void main() {\n"
     "    gl_Position = mvp * vec4(pos, 1);\n"
+    "    norm = normal;\n"
     "}\n"
     ;
 
 static const char* fragSrc =
     "#version 330 core\n"
     "layout(location = 0) out vec4 color;\n"
+    "in vec3 norm;\n"
     "void main() {\n"
-    "    color = vec4(1, 0, 0, 1);\n"
+    "    color = vec4(norm, 1);\n"
     "}\n"
     ;
 
@@ -98,30 +102,41 @@ static void appCallback(GLFWwindow* window) {
     glGenVertexArrays(1, &vao);
     glBindVertexArray(vao);
 
-    std::vector<cy::Vec3f> vboData;
-    //vboData.push_back(cy::Vec3f(-1, 1, 0));
-    //vboData.push_back(cy::Vec3f(-1, -1, 0));
-    //vboData.push_back(cy::Vec3f(1, -1, 0));
+    std::vector<cy::Vec3f> vertexData;
+    std::vector<cy::Vec3f> normalData;
     for(int i = 0; i < mesh.NF(); i++) {
-        cy::TriMesh::TriFace face = mesh.F(i);
-        vboData.push_back(mesh.V(face.v[0]));
-        vboData.push_back(mesh.V(face.v[1]));
-        vboData.push_back(mesh.V(face.v[2]));
+        cy::TriMesh::TriFace vertexFace = mesh.F(i);
+        cy::TriMesh::TriFace normalFace = mesh.FN(i);
+        for(int j = 0; j < 3; j++) {
+            vertexData.push_back(mesh.V(vertexFace.v[j]));
+            normalData.push_back(mesh.VN(normalFace.v[j]));
+        }
     }
 
-    GLuint vbo;
-    glGenBuffers(1, &vbo);
-    glBindBuffer(GL_ARRAY_BUFFER, vbo);
-    glBufferData(GL_ARRAY_BUFFER, sizeof(cy::Vec3f) * vboData.size(), vboData.data(), GL_STATIC_DRAW);
+    GLuint vertexVBO;
+    glGenBuffers(1, &vertexVBO);
+    glBindBuffer(GL_ARRAY_BUFFER, vertexVBO);
+    glBufferData(GL_ARRAY_BUFFER, sizeof(cy::Vec3f) * vertexData.size(), vertexData.data(), GL_STATIC_DRAW);
 
+    GLuint normalVBO;
+    glGenBuffers(1, &normalVBO);
+    glBindBuffer(GL_ARRAY_BUFFER, normalVBO);
+    glBufferData(GL_ARRAY_BUFFER, sizeof(cy::Vec3f) * normalData.size(), normalData.data(), GL_STATIC_DRAW);
 
     cy::GLSLProgram program;
     program.BuildSources(vertSrc, fragSrc);
 
     GLint posLoc = program.AttribLocation("pos");
     glEnableVertexAttribArray(posLoc);
-    glBindBuffer(GL_ARRAY_BUFFER, vbo);
+    glBindBuffer(GL_ARRAY_BUFFER, vertexVBO);
     glVertexAttribPointer(posLoc, 3, GL_FLOAT, GL_FALSE, 0, (GLvoid*)0);
+
+    GLint normalLoc = program.AttribLocation("normal");
+    glEnableVertexAttribArray(normalLoc);
+    glBindBuffer(GL_ARRAY_BUFFER, normalVBO);
+    glVertexAttribPointer(normalLoc, 3, GL_FLOAT, GL_FALSE, 0, (GLvoid*)0);
+
+    glEnable(GL_DEPTH_TEST);
 
     arp::captureCursor();
 
@@ -134,7 +149,7 @@ static void appCallback(GLFWwindow* window) {
         arp::getCameraPose(pose, poseInfo);
 
         glViewport(0, 0, swapchain->width, swapchain->height);
-        glClearColor(0, 0.5, 0.5, 1);
+        glClearColor(0.1, 0.1, 0.1, 1);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
         glm::mat4 projection = glm::perspective(0.5f * 3.14159265358979324f, (float)aspectRatio, 0.1f, 100.f);
@@ -145,7 +160,7 @@ static void appCallback(GLFWwindow* window) {
         program.SetUniformMatrix4("mvp", &mvp[0][0]);
 
         program.Bind();
-        glDrawArrays(GL_TRIANGLES, 0, vboData.size());
+        glDrawArrays(GL_TRIANGLES, 0, vertexData.size());
 
         arp::FrameSubmitInfo submitInfo;
         submitInfo.pose = pose;
