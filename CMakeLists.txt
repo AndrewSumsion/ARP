@@ -15,6 +15,8 @@ target_link_libraries(arp glfw glew_s)
 add_executable(
     test
     test.cpp
+    stb_image.cpp
+    renderobject.cpp
 )
 
 target_include_directories(test PUBLIC glfw/include glew/include glm cyCodeBase)

@@ -1,6 +1,6 @@
 #include <GL/glew.h>
-#include <cyGL.h>
-#include <cyTriMesh.h>
+#include "cyGL.h"
+#include "cyTriMesh.h"
 
 struct PoseData {
     double rotationX;
@@ -8,6 +8,7 @@ struct PoseData {
 };
 #define ARP_CUSTOM_POSE_DATA
 #include "arp.h"
+#include "renderobject.h"
 
 #include <iostream>
 #include <chrono>
@@ -63,6 +64,12 @@ int main(int argc, char *argv[]) {
         return -1;
     }
 
+    /* Window hints to get a high enough OpenGL version*/
+    glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
+    glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 2);
+    glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GL_TRUE);
+    glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
+    
     GLFWwindow* window = glfwCreateWindow(640, 480, "My Title", NULL, NULL);
     if (!window) {
         std::cout << "Unable to create window" << std::endl;
@@ -94,56 +101,38 @@ int main(int argc, char *argv[]) {
 
 static void appCallback(GLFWwindow* window) {
     swapchain = new arp::Swapchain(640, 480, 3);
-
-    cy::TriMesh mesh;
-    mesh.LoadFromFileObj(meshPath, false);
-
-    GLuint vao;
-    glGenVertexArrays(1, &vao);
-    glBindVertexArray(vao);
-
-    std::vector<cy::Vec3f> vertexData;
-    std::vector<cy::Vec3f> normalData;
-    for(int i = 0; i < mesh.NF(); i++) {
-        cy::TriMesh::TriFace vertexFace = mesh.F(i);
-        cy::TriMesh::TriFace normalFace = mesh.FN(i);
-        for(int j = 0; j < 3; j++) {
-            vertexData.push_back(mesh.V(vertexFace.v[j]));
-            normalData.push_back(mesh.VN(normalFace.v[j]));
+    
+    std::vector<renderobject> tiles;
+    
+    double x = -12.4 * 5;
+    double y = -12.4 * 3;
+    
+    for(int i = 0; i < 10; i++)
+    {
+        for(int j = 0; j < 10; j++)
+        {
+            tiles.push_back(renderobject("tileFloor1W1.obj", x, -10, y));
+            x += 6.2;
         }
+        x -= 62;
+        y += 12.4;
     }
-
-    GLuint vertexVBO;
-    glGenBuffers(1, &vertexVBO);
-    glBindBuffer(GL_ARRAY_BUFFER, vertexVBO);
-    glBufferData(GL_ARRAY_BUFFER, sizeof(cy::Vec3f) * vertexData.size(), vertexData.data(), GL_STATIC_DRAW);
-
-    GLuint normalVBO;
-    glGenBuffers(1, &normalVBO);
-    glBindBuffer(GL_ARRAY_BUFFER, normalVBO);
-    glBufferData(GL_ARRAY_BUFFER, sizeof(cy::Vec3f) * normalData.size(), normalData.data(), GL_STATIC_DRAW);
-
-    cy::GLSLProgram program;
-    program.BuildSources(vertSrc, fragSrc);
-
-    GLint posLoc = program.AttribLocation("pos");
-    glEnableVertexAttribArray(posLoc);
-    glBindBuffer(GL_ARRAY_BUFFER, vertexVBO);
-    glVertexAttribPointer(posLoc, 3, GL_FLOAT, GL_FALSE, 0, (GLvoid*)0);
-
-    GLint normalLoc = program.AttribLocation("normal");
-    glEnableVertexAttribArray(normalLoc);
-    glBindBuffer(GL_ARRAY_BUFFER, normalVBO);
-    glVertexAttribPointer(normalLoc, 3, GL_FLOAT, GL_FALSE, 0, (GLvoid*)0);
+    
+    // renderobject rock1 = renderobject("pileStone4.obj", -12.4, -10, 0);
+    renderobject minecart = renderobject("minecartTipW1.obj", -12.4, -10, -12.4);
+    
 
     glEnable(GL_DEPTH_TEST);
 
     arp::captureCursor();
+    
+    
 
     while(!glfwWindowShouldClose(window)) {
         int swapchainIndex = swapchain->acquireImage();
         swapchain->bindFramebuffer(swapchainIndex);
-
+        
+        
         arp::Pose pose;
         arp::PoseInfo poseInfo;
         arp::getCameraPose(pose, poseInfo);
@@ -156,11 +145,22 @@ static void appCallback(GLFWwindow* window) {
         glm::mat4 camera = glm::translate(glm::mat4(1), pose.position) * glm::mat4(pose.orientation);
         glm::mat4 view = glm::inverse(camera);
         glm::mat4 mvp = projection * view;
-
-        program.SetUniformMatrix4("mvp", &mvp[0][0]);
-
-        program.Bind();
-        glDrawArrays(GL_TRIANGLES, 0, vertexData.size());
+        
+        minecart.updateMatrices(pose, aspectRatio);
+        minecart.render();
+        
+       // minecart.updateMatrices();
+        for(int i = 0; i < tiles.size(); i++)
+        {
+            tiles[i].updateMatrices(pose, aspectRatio);
+            tiles[i].render();
+        }
+        
+        //rock1.updateMatrices(pose, aspectRatio);
+        //rock1.render();
+        
+        
+        
 
         arp::FrameSubmitInfo submitInfo;
         submitInfo.pose = pose;
@@ -175,11 +175,9 @@ static void appCallback(GLFWwindow* window) {
         submitInfo.layers.push_back(layer);
 
         arp::submitFrame(submitInfo);
-        double fps = 30;
+        double fps = 1;
         std::this_thread::sleep_for(std::chrono::milliseconds((int)(1000 / fps)));
 
-        glfwSwapBuffers(window);
-        glfwPollEvents();
     }
 
     arp::releaseCursor();

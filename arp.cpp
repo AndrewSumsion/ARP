@@ -2,7 +2,7 @@
 
 #include <GL/glew.h>
 #include <GLFW/glfw3.h>
-#include <glm/glm.hpp>
+#include "glm/glm.hpp"
 
 #include <thread>
 #include <chrono>
@@ -257,6 +257,14 @@ int startReprojection(ApplicationCallback callback) {
     cameraPose.orientation = glm::quat(1, 0, 0, 0);
     lastFrame.pose = cameraPose;
 
+    
+    glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
+    glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 2);
+    glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GL_TRUE);
+    glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
+    glfwWindowHint(GLFW_VISIBLE, GLFW_FALSE);
+    hiddenWindow = glfwCreateWindow(1, 1, "", NULL, window);
+    glfwWindowHint(GLFW_VISIBLE, GLFW_TRUE);
     // start app thread
     reprojectionThread = std::thread(appThreadStarter, callback);
 
@@ -371,9 +379,6 @@ void shutdown() {
 }
 
 static void appThreadStarter(ApplicationCallback callback) {
-    glfwWindowHint(GLFW_VISIBLE, GLFW_FALSE);
-    hiddenWindow = glfwCreateWindow(1, 1, "", NULL, window);
-    glfwWindowHint(GLFW_VISIBLE, GLFW_TRUE);
     glfwMakeContextCurrent(hiddenWindow);
     callback(hiddenWindow);
 
@@ -405,7 +410,7 @@ static void setupGL() {
     GLuint vao;
     glGenVertexArrays(1, &vao);
     glBindVertexArray(vao);
-
+    
     float vertexData[] = {
         -1, -1, 0, // bottom left
         -1,  1, 0, // top left

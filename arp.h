@@ -17,7 +17,7 @@ namespace arp {
 
 /**
  * Represents the position and orientation of a camera
- * 
+ *
  * If you would like to specify custom info to track with poses (such as pitch/
  * yaw), define a struct called PoseData that is less than 64 bytes in size and
  * define ARP_CUSTOM_POSE_DATA before including
@@ -125,17 +125,17 @@ typedef double (*KeyTimeFunction)(int key);
  * Function pointer type used by the application to specify how camera pose
  * responds to user input. This function MUST have no side effects, as it may
  * be called by reprojection many times for each frame
- * 
+ *
  * mouseX - Net movement of mouse in the X direction. A value of zero does not
  *          necessarily correspond to any specific position
  * mouseY - Net movement of mouse in the Y direction
  * time - A monotonically increasing timer in seconds. Note that the value may
- *        not be monotonic from the perspective of this function, as this 
+ *        not be monotonic from the perspective of this function, as this
  *        function may be used for different times in any order. The time
  *        should never be before the most recently submitted frame.
  * keyTime - A function that gets the total time a certain key (GLFW int key
  *           code) has been pressed, returned as a double in seconds
- * 
+ *
  * Returns the position and orientation of the camera with the given input
  */
 typedef Pose (*PoseFunction)(const Pose& lastPose, double dx, double dy,
@@ -156,13 +156,13 @@ int initialize();
 
 /**
  * After creating a GLFW window, this function hands it off to the reprojection
- * thread. The window will be replaced with with a hidden window that shares a 
+ * thread. The window will be replaced with with a hidden window that shares a
  * context with the original window. Use this window for rendering.
- * 
+ *
  * This new window is meant to be essentially an offscreen context. The default
- * framebuffer should not be drawn to, as it will have no effect. Only FBOs 
+ * framebuffer should not be drawn to, as it will have no effect. Only FBOs
  * should be used in this context.
- * 
+ *
  * Returns 0 on success
  */
 int startReprojection(ApplicationCallback callback);
