@@ -13,8 +13,11 @@ struct PoseData {
 #include <iostream>
 #include <chrono>
 #include <thread>
-#define _USE_MATH_DEFINES
 #include <cmath>
+
+#ifndef M_PI
+    #define M_PI 3.14159265358979323846
+#endif
 
 static const char* vertSrc =
     "#version 330 core\n"
@@ -51,6 +54,7 @@ static void mouseButtonCallback(GLFWwindow* window, int button, int action, int 
 static const char* meshPath;
 static arp::Swapchain* swapchain;
 static double aspectRatio = 1;
+static double fovY = 90 * M_PI / 180;
 
 int main(int argc, char *argv[]) {
     if(argc != 2) {
@@ -70,7 +74,7 @@ int main(int argc, char *argv[]) {
     glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GL_TRUE);
     glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
     
-    GLFWwindow* window = glfwCreateWindow(640, 480, "My Title", NULL, NULL);
+    GLFWwindow* window = glfwCreateWindow(640, 480, "ARP Test", NULL, NULL);
     if (!window) {
         std::cout << "Unable to create window" << std::endl;
         return -1;
@@ -93,7 +97,7 @@ int main(int argc, char *argv[]) {
     }
 
     arp::registerPoseFunction(poseFunction);
-    arp::updateProjection(0.1, 100, 90 * 3.14159265358979324 / 180, aspectRatio);
+    arp::updateProjection(0.1, 100, fovY, aspectRatio);
     arp::startReprojection(appCallback);
 
     // arp has taken over this thread and blocks until program is over
@@ -140,19 +144,14 @@ static void appCallback(GLFWwindow* window) {
         glViewport(0, 0, swapchain->width, swapchain->height);
         glClearColor(0.1, 0.1, 0.1, 1);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-
-        glm::mat4 projection = glm::perspective(0.5f * 3.14159265358979324f, (float)aspectRatio, 0.1f, 100.f);
-        glm::mat4 camera = glm::translate(glm::mat4(1), pose.position) * glm::mat4(pose.orientation);
-        glm::mat4 view = glm::inverse(camera);
-        glm::mat4 mvp = projection * view;
         
-        minecart.updateMatrices(pose, aspectRatio);
+        minecart.updateMatrices(pose, aspectRatio, fovY);
         minecart.render();
         
        // minecart.updateMatrices();
         for(int i = 0; i < tiles.size(); i++)
         {
-            tiles[i].updateMatrices(pose, aspectRatio);
+            tiles[i].updateMatrices(pose, aspectRatio, fovY);
             tiles[i].render();
         }
         
@@ -168,7 +167,7 @@ static void appCallback(GLFWwindow* window) {
 
         arp::FrameLayer layer;
         layer.flags = arp::FrameLayerFlags::NONE;
-        layer.fov = 3.14159265358979324 / 2;
+        layer.fov = fovY;
         layer.swapchain = swapchain;
         layer.swapchainIndex = swapchainIndex;
 

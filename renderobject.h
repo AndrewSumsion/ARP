@@ -33,7 +33,7 @@ private:
     cy::TriMesh mesh;
     
 public:
-    void updateMatrices(arp::Pose pose, double aspectRatio);
+    void updateMatrices(arp::Pose pose, double aspectRatio, double fovY);
     void render();
     renderobject(char *fileName, double startingX, double startingY, double startingZ);
     

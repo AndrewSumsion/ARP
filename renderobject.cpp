@@ -2,9 +2,9 @@
 
 #include "stb_image.h"
 
-void renderobject::updateMatrices(arp::Pose pose, double aspectRatio)
+void renderobject::updateMatrices(arp::Pose pose, double aspectRatio, double fovY)
 {
-    glm::mat4 projection = glm::perspective(2.0f, (float)aspectRatio, 0.1f, 100.f);
+    glm::mat4 projection = glm::perspective((float)fovY, (float)aspectRatio, 0.1f, 100.f);
     glm::mat4 camera = glm::translate(glm::mat4(1), pose.position) * glm::mat4(pose.orientation);
     
     glm::mat4 m4( 1.0f );
