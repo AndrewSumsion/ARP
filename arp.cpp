@@ -349,12 +349,7 @@ int startReprojection(ApplicationCallback callback) {
 }
 
 void submitFrame(const FrameSubmitInfo& submitInfo) {
-    // This blocks the application thread until rendering on the GPU finishes.
-    // This is an inefficient stopgap that prevents the reprojection thread
-    // from sampling an incomplete frame, but in the future the app should
-    // provide the reprojection thread with a sync object to poll before
-    // it actually starts using the submitted frame
-    glFinish();
+    glFlush();
 
     for(arp::FrameLayer& layer : lastFrame.layers) {
         layer.swapchain->releaseImage(layer.swapchainIndex);
