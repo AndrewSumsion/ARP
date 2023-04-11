@@ -315,25 +315,26 @@ int startReprojection(ApplicationCallback callback) {
 
             cameraPose = poseFunction(lastFrame.pose, dx, dy, dt, keyTimeFunction);
             orientationDifference = glm::inverse(lastFrame.pose.orientation) * cameraPose.orientation;
+            // orientationDifference: camera - lastFrame
+            glm::mat4 mv = glm::mat4(glm::inverse(orientationDifference)) * view;
+            glm::mat4 mvp = projection * mv;
+            GLuint mvLoc = glGetUniformLocation(program, "mv");
+            glUniformMatrix4fv(mvLoc, 1, GL_FALSE, &mv[0][0]);
+            GLuint mvpLoc = glGetUniformLocation(program, "mvp");
+            glUniformMatrix4fv(mvpLoc, 1, GL_FALSE, &mvp[0][0]);
+
+
+            glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+
+            glUseProgram(program);
+            // TODO: Properly support layers
+            if(frameValid) {
+
+                GLuint texture = lastFrame.layers[0].swapchain->images[lastFrame.layers[0].swapchainIndex];
+                glBindTexture(GL_TEXTURE_2D, texture);
+            }
+            glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
         }
-        // orientationDifference: camera - lastFrame
-        glm::mat4 mv = glm::mat4(glm::inverse(orientationDifference)) * view;
-        glm::mat4 mvp = projection * mv;
-        GLuint mvLoc = glGetUniformLocation(program, "mv");
-        glUniformMatrix4fv(mvLoc, 1, GL_FALSE, &mv[0][0]);
-        GLuint mvpLoc = glGetUniformLocation(program, "mvp");
-        glUniformMatrix4fv(mvpLoc, 1, GL_FALSE, &mvp[0][0]);
-
-
-        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-
-        glUseProgram(program);
-        // TODO: Properly support layers
-        if(frameValid) {
-            GLuint texture = lastFrame.layers[0].swapchain->images[lastFrame.layers[0].swapchainIndex];
-            glBindTexture(GL_TEXTURE_2D, texture);
-        }
-        glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
 
         glfwSwapBuffers(window);
         glfwPollEvents();
