@@ -174,7 +174,7 @@ static void appCallback(GLFWwindow* window) {
         submitInfo.layers.push_back(layer);
 
         arp::submitFrame(submitInfo);
-        double fps = 1;
+        double fps = 30;
         std::this_thread::sleep_for(std::chrono::milliseconds((int)(1000 / fps)));
 
     }
