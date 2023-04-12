@@ -57,7 +57,9 @@ static arp::Swapchain* backgroundSwapchain;
 static double aspectRatio = 1;
 static double fovY = 90 * M_PI / 180;
 
-static bool shouldReproject = true;
+static bool shouldReproject = false;
+static bool shouldBackground = false;
+static bool shouldPredict = false;
 
 int main(int argc, char *argv[]) {
     if(argc != 2) {
@@ -136,8 +138,17 @@ static void appCallback(GLFWwindow* window) {
     while(!glfwWindowShouldClose(window)) {
         arp::Pose pose;
         arp::PoseInfo poseInfo;
-        double predictedDisplayTime = arp::getPredictedDisplayTime();
-        arp::getPredictedCameraPose(predictedDisplayTime, pose, poseInfo);
+        if(shouldPredict) {
+            double predictedDisplayTime = arp::getPredictedDisplayTime();
+            arp::getPredictedCameraPose(predictedDisplayTime, pose, poseInfo);
+        }
+        else {
+            arp::getCameraPose(pose, poseInfo);
+        }
+
+        arp::FrameSubmitInfo submitInfo;
+        submitInfo.pose = pose;
+        submitInfo.poseInfo = poseInfo;
 
         ///// Main image /////
 
@@ -161,52 +172,48 @@ static void appCallback(GLFWwindow* window) {
         //rock1.updateMatrices(pose, aspectRatio);
         //rock1.render();
 
-        ///// Background image /////
-
-        double backgroundFovFactor = 1.5;
-        int backgroundSwapchainIndex = backgroundSwapchain->acquireImage();
-        backgroundSwapchain->bindFramebuffer(backgroundSwapchainIndex);
-
-        glViewport(0, 0, backgroundSwapchain->width, backgroundSwapchain->height);
-        glClearColor(0.1, 0.1, 0.1, 1);
-        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-        
-        minecart.updateMatrices(pose, aspectRatio, fovY * backgroundFovFactor);
-        minecart.render();
-        
-        // minecart.updateMatrices();
-        for(int i = 0; i < tiles.size(); i++)
-        {
-            tiles[i].updateMatrices(pose, aspectRatio, fovY * backgroundFovFactor);
-            tiles[i].render();
-        }
-        
-        //rock1.updateMatrices(pose, aspectRatio);
-        //rock1.render();
-        
-        arp::FrameSubmitInfo submitInfo;
-        submitInfo.pose = pose;
-        submitInfo.poseInfo = poseInfo;
-
         arp::FrameLayer layer;
         layer.flags = arp::NONE;
         layer.fov = fovY;
         layer.swapchain = swapchain;
         layer.swapchainIndex = swapchainIndex;
-
-        arp::FrameLayer backgroundLayer;
-        backgroundLayer.flags = arp::NONE;
-        backgroundLayer.fov = fovY * backgroundFovFactor;
-        backgroundLayer.swapchain = backgroundSwapchain;
-        backgroundLayer.swapchainIndex = backgroundSwapchainIndex;
-
-        if(!shouldReproject) {
+        if(!shouldReproject)
             layer.flags = arp::CAMERA_LOCKED;
-            backgroundLayer.flags = arp::CAMERA_LOCKED;
-        }
-
         submitInfo.layers.push_back(layer);
-        submitInfo.layers.push_back(backgroundLayer);
+
+        ///// Background image /////
+
+        if(shouldBackground) {
+            double backgroundFovFactor = 1.5;
+            int backgroundSwapchainIndex = backgroundSwapchain->acquireImage();
+            backgroundSwapchain->bindFramebuffer(backgroundSwapchainIndex);
+    
+            glViewport(0, 0, backgroundSwapchain->width, backgroundSwapchain->height);
+            glClearColor(0.1, 0.1, 0.1, 1);
+            glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+            
+            minecart.updateMatrices(pose, aspectRatio, fovY * backgroundFovFactor);
+            minecart.render();
+            
+            // minecart.updateMatrices();
+            for(int i = 0; i < tiles.size(); i++)
+            {
+                tiles[i].updateMatrices(pose, aspectRatio, fovY * backgroundFovFactor);
+                tiles[i].render();
+            }
+            
+            //rock1.updateMatrices(pose, aspectRatio);
+            //rock1.render();
+
+            arp::FrameLayer backgroundLayer;
+            backgroundLayer.flags = arp::NONE;
+            backgroundLayer.fov = fovY * backgroundFovFactor;
+            backgroundLayer.swapchain = backgroundSwapchain;
+            backgroundLayer.swapchainIndex = backgroundSwapchainIndex;
+            if(!shouldReproject)
+                backgroundLayer.flags = arp::CAMERA_LOCKED;
+            submitInfo.layers.push_back(backgroundLayer);
+        }
 
         arp::submitFrame(submitInfo);
         double fps = 15;
@@ -252,6 +259,12 @@ static void keyCallback(GLFWwindow* window, int key, int scancode, int action, i
     }
     if(key == GLFW_KEY_1 && action == GLFW_PRESS) {
         shouldReproject = !shouldReproject;
+    }
+    if(key == GLFW_KEY_2 && action == GLFW_PRESS) {
+        shouldBackground = !shouldBackground;
+    }
+    if(key == GLFW_KEY_3 && action == GLFW_PRESS) {
+        shouldPredict = !shouldPredict;
     }
 }
 
