@@ -51,7 +51,6 @@ static void framebufferSizeCallback(GLFWwindow* window, int width, int height);
 static void windowFocusCallback(GLFWwindow* window, int focused);
 static void mouseButtonCallback(GLFWwindow* window, int button, int action, int mods);
 
-static const char* meshPath;
 static arp::Swapchain* swapchain;
 static arp::Swapchain* backgroundSwapchain;
 static double aspectRatio = 1;
@@ -62,12 +61,6 @@ static bool shouldBackground = false;
 static bool shouldPredict = false;
 
 int main(int argc, char *argv[]) {
-    if(argc != 2) {
-        std::cout << "wrong number of arguments" << std::endl;
-        return 1;
-    }
-    meshPath = argv[1];
-
     if (!glfwInit()) {
         std::cout << "Unable to initialize GLFW" << std::endl;
         return -1;

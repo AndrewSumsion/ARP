@@ -329,6 +329,8 @@ int startReprojection(ApplicationCallback callback) {
 
     glfwSetWindowShouldClose(hiddenWindow, GLFW_TRUE);
 
+    reprojectionThread.join();
+
     return 0;
 }
 
