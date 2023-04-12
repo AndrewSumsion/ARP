@@ -93,7 +93,7 @@ public:
     void releaseImage(int index);
 };
 
-enum class FrameLayerFlags : std::uint32_t {
+enum FrameLayerFlags : std::uint32_t {
     NONE = 0,
     // Changes in position are approximated by parallax mapping
     PARALLAX_ENABLED = 1 << 0,

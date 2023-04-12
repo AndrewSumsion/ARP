@@ -53,8 +53,11 @@ static void mouseButtonCallback(GLFWwindow* window, int button, int action, int 
 
 static const char* meshPath;
 static arp::Swapchain* swapchain;
+static arp::Swapchain* backgroundSwapchain;
 static double aspectRatio = 1;
 static double fovY = 90 * M_PI / 180;
+
+static bool shouldReproject = true;
 
 int main(int argc, char *argv[]) {
     if(argc != 2) {
@@ -105,6 +108,7 @@ int main(int argc, char *argv[]) {
 
 static void appCallback(GLFWwindow* window) {
     swapchain = new arp::Swapchain(640, 480, 3);
+    backgroundSwapchain = new arp::Swapchain(swapchain->width / 4, swapchain->height / 4, 3);
     
     std::vector<renderobject> tiles;
     
@@ -125,21 +129,19 @@ static void appCallback(GLFWwindow* window) {
     // renderobject rock1 = renderobject("pileStone4.obj", -12.4, -10, 0);
     renderobject minecart = renderobject("minecartTipW1.obj", -12.4, -10, -12.4);
     
-
     glEnable(GL_DEPTH_TEST);
 
     arp::captureCursor();
     
-    
-
     while(!glfwWindowShouldClose(window)) {
-        int swapchainIndex = swapchain->acquireImage();
-        swapchain->bindFramebuffer(swapchainIndex);
-        
-        
         arp::Pose pose;
         arp::PoseInfo poseInfo;
         arp::getCameraPose(pose, poseInfo);
+
+        ///// Main image /////
+
+        int swapchainIndex = swapchain->acquireImage();
+        swapchain->bindFramebuffer(swapchainIndex);
 
         glViewport(0, 0, swapchain->width, swapchain->height);
         glClearColor(0.1, 0.1, 0.1, 1);
@@ -148,7 +150,7 @@ static void appCallback(GLFWwindow* window) {
         minecart.updateMatrices(pose, aspectRatio, fovY);
         minecart.render();
         
-       // minecart.updateMatrices();
+        // minecart.updateMatrices();
         for(int i = 0; i < tiles.size(); i++)
         {
             tiles[i].updateMatrices(pose, aspectRatio, fovY);
@@ -157,26 +159,57 @@ static void appCallback(GLFWwindow* window) {
         
         //rock1.updateMatrices(pose, aspectRatio);
         //rock1.render();
-        
-        
-        
 
+        ///// Background image /////
+
+        double backgroundFovFactor = 1.5;
+        int backgroundSwapchainIndex = backgroundSwapchain->acquireImage();
+        backgroundSwapchain->bindFramebuffer(backgroundSwapchainIndex);
+
+        glViewport(0, 0, backgroundSwapchain->width, backgroundSwapchain->height);
+        glClearColor(0.1, 0.1, 0.1, 1);
+        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+        
+        minecart.updateMatrices(pose, aspectRatio, fovY * backgroundFovFactor);
+        minecart.render();
+        
+        // minecart.updateMatrices();
+        for(int i = 0; i < tiles.size(); i++)
+        {
+            tiles[i].updateMatrices(pose, aspectRatio, fovY * backgroundFovFactor);
+            tiles[i].render();
+        }
+        
+        //rock1.updateMatrices(pose, aspectRatio);
+        //rock1.render();
+        
         arp::FrameSubmitInfo submitInfo;
         submitInfo.pose = pose;
         submitInfo.poseInfo = poseInfo;
 
         arp::FrameLayer layer;
-        layer.flags = arp::FrameLayerFlags::NONE;
+        layer.flags = arp::NONE;
         layer.fov = fovY;
         layer.swapchain = swapchain;
         layer.swapchainIndex = swapchainIndex;
 
+        arp::FrameLayer backgroundLayer;
+        backgroundLayer.flags = arp::NONE;
+        backgroundLayer.fov = fovY * backgroundFovFactor;
+        backgroundLayer.swapchain = backgroundSwapchain;
+        backgroundLayer.swapchainIndex = backgroundSwapchainIndex;
+
+        if(!shouldReproject) {
+            layer.flags = arp::CAMERA_LOCKED;
+            backgroundLayer.flags = arp::CAMERA_LOCKED;
+        }
+
         submitInfo.layers.push_back(layer);
+        submitInfo.layers.push_back(backgroundLayer);
 
         arp::submitFrame(submitInfo);
         double fps = 30;
         std::this_thread::sleep_for(std::chrono::milliseconds((int)(1000 / fps)));
-
     }
 
     arp::releaseCursor();
@@ -216,10 +249,14 @@ static void keyCallback(GLFWwindow* window, int key, int scancode, int action, i
     if(key == GLFW_KEY_ESCAPE && action == GLFW_PRESS) {
         arp::releaseCursor();
     }
+    if(key == GLFW_KEY_1 && action == GLFW_PRESS) {
+        shouldReproject = !shouldReproject;
+    }
 }
 
 static void framebufferSizeCallback(GLFWwindow* window, int width, int height) {
     swapchain->resize(width, height);
+    backgroundSwapchain->resize(width / 4, height / 4);
 }
 
 static void windowFocusCallback(GLFWwindow* window, int focused) {

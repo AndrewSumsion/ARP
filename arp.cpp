@@ -24,6 +24,7 @@ static void appThreadStarter(ApplicationCallback callback);
 static void keyCallback(GLFWwindow* window, int key, int scancode, int action, int mods);
 static void framebufferSizeCallback(GLFWwindow* window, int width, int height);
 static void setupGL();
+static void drawLayer(const FrameLayer& layer);
 static void compileShader(GLuint shader, const char* source);
 static double keyTimeFunction(int key);
 
@@ -83,7 +84,6 @@ static const char* fragSrc =
 
 GLuint program;
 glm::mat4 projection;
-glm::mat4 view;
 
 Swapchain::Swapchain(int width, int height, int numImages)
   : width(width),
@@ -238,11 +238,6 @@ void updateProjection(float near_, float far_, float fovY_, float aspectRatio_) 
     float near = projectionNear * cosf(fov / 2.f) * 0.5;
     float far = projectionFar;
     projection = glm::perspective(projectionFovY, projectionAspect, near, far);
-
-    float xScale = projectionNear * tanf(fovX / 2.f);
-    float yScale = projectionNear * tanf(fovY / 2.f);
-    view = glm::translate(glm::mat4(1), glm::vec3(0, 0, -projectionNear)) *
-           glm::scale(glm::mat4(1), glm::vec3(xScale, yScale, 1));
 }
 
 int startReprojection(ApplicationCallback callback) {
@@ -284,8 +279,6 @@ int startReprojection(ApplicationCallback callback) {
             glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_NORMAL);
         }
 
-        glm::quat orientationDifference;
-
         double time = glfwGetTime();
         double lastFrameDuration = time - frameStartTime;
         frameStartTime = time;
@@ -314,26 +307,14 @@ int startReprojection(ApplicationCallback callback) {
             }
 
             cameraPose = poseFunction(lastFrame.pose, dx, dy, dt, keyTimeFunction);
-            orientationDifference = glm::inverse(lastFrame.pose.orientation) * cameraPose.orientation;
+            
             // orientationDifference: camera - lastFrame
-            glm::mat4 mv = glm::mat4(glm::inverse(orientationDifference)) * view;
-            glm::mat4 mvp = projection * mv;
-            GLuint mvLoc = glGetUniformLocation(program, "mv");
-            glUniformMatrix4fv(mvLoc, 1, GL_FALSE, &mv[0][0]);
-            GLuint mvpLoc = glGetUniformLocation(program, "mvp");
-            glUniformMatrix4fv(mvpLoc, 1, GL_FALSE, &mvp[0][0]);
-
 
             glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-            glUseProgram(program);
-            // TODO: Properly support layers
-            if(frameValid) {
-
-                GLuint texture = lastFrame.layers[0].swapchain->images[lastFrame.layers[0].swapchainIndex];
-                glBindTexture(GL_TEXTURE_2D, texture);
-            }
-            glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
+            if(frameValid)
+                for(int i = lastFrame.layers.size() - 1; i >= 0; i--)
+                    drawLayer(lastFrame.layers[i]);
         }
 
         glfwSwapBuffers(window);
@@ -346,6 +327,38 @@ int startReprojection(ApplicationCallback callback) {
     glfwSetWindowShouldClose(hiddenWindow, GLFW_TRUE);
 
     return 0;
+}
+
+static void drawLayer(const FrameLayer& layer) {
+    float fovY = layer.fov;
+    // TODO: allow layers with different aspect ratios
+    float fovX = projectionAspect * fovY;
+    float xScale = projectionNear * tanf(fovX / 2.f);
+    float yScale = projectionNear * tanf(fovY / 2.f);
+    glm::mat4 view = glm::translate(glm::mat4(1), glm::vec3(0, 0, -projectionNear)) *
+                     glm::scale(glm::mat4(1), glm::vec3(xScale, yScale, 1));
+
+    // Only rotate if layer is not camera locked
+    glm::mat4 mv = view;
+    if(!(layer.flags & CAMERA_LOCKED)) {
+        // TODO: Simplify this math
+        glm::quat orientationDifference = glm::inverse(lastFrame.pose.orientation) * cameraPose.orientation;
+        mv = glm::mat4(glm::inverse(orientationDifference)) * mv;
+    }
+
+    glUseProgram(program);
+
+    // setup uniforms
+    glm::mat4 mvp = projection * mv;
+    GLuint mvLoc = glGetUniformLocation(program, "mv");
+    glUniformMatrix4fv(mvLoc, 1, GL_FALSE, &mv[0][0]);
+    GLuint mvpLoc = glGetUniformLocation(program, "mvp");
+    glUniformMatrix4fv(mvpLoc, 1, GL_FALSE, &mvp[0][0]);
+
+    // draw quad
+    GLuint texture = layer.swapchain->images[layer.swapchainIndex];
+    glBindTexture(GL_TEXTURE_2D, texture);
+    glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
 }
 
 void submitFrame(const FrameSubmitInfo& submitInfo) {
@@ -411,6 +424,7 @@ static void setupGL() {
     GLuint vao;
     glGenVertexArrays(1, &vao);
     glBindVertexArray(vao);
+
     
     float vertexData[] = {
         -1, -1, 0, // bottom left
