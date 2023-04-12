@@ -12,6 +12,7 @@
 #include <unordered_map>
 #include <unordered_set>
 #include <vector>
+#include <list>
 #include <cmath>
 
 using std::uint32_t;
@@ -45,6 +46,10 @@ static std::thread reprojectionThread;
 static std::mutex posesMutex;
 static bool frameValid = false;
 static FrameSubmitInfo lastFrame;
+
+// used for prediction
+static const int historySize = 10;
+static std::list<PoseInfo> poseHistory;
 
 static Pose cameraPose;
 static PoseInfo cameraPoseInfo{0};
@@ -306,7 +311,8 @@ int startReprojection(ApplicationCallback callback) {
                 dy = 0;
             }
 
-            cameraPose = poseFunction(lastFrame.pose, dx, dy, dt, keyTimeFunction);
+            cameraPose = poseFunction(lastFrame.poseInfo.realPose, dx, dy, dt, keyTimeFunction);
+            cameraPoseInfo.realPose = cameraPose;
             
             // orientationDifference: camera - lastFrame
 
@@ -361,6 +367,12 @@ static void drawLayer(const FrameLayer& layer) {
 void submitFrame(const FrameSubmitInfo& submitInfo) {
     glFlush();
 
+    // keep cycling list of historySize last frames
+    poseHistory.push_back(submitInfo.poseInfo);
+    while(poseHistory.size() > historySize) {
+        poseHistory.pop_front();
+    }
+
     for(arp::FrameLayer& layer : lastFrame.layers) {
         layer.swapchain->releaseImage(layer.swapchainIndex);
     }
@@ -382,6 +394,54 @@ void getCameraPose(Pose& pose, PoseInfo& poseInfo) {
     std::lock_guard<std::mutex> posesLock(posesMutex);
     pose = cameraPose;
     poseInfo = cameraPoseInfo;
+}
+
+double getPredictedDisplayTime() {
+    if(poseHistory.size() < 2) {
+        // no way to guess if the history is empty, just return 60fps interval
+        return 1.0 / 60.0;
+    }
+
+    // calculate average interval over frame history
+    int numIntervals = poseHistory.size() - 1;
+    double lastTime = -1.0;
+    double intervalsTotal = 0;
+    for(const PoseInfo& poseInfo : poseHistory) {
+        if(lastTime == -1.0) {
+            lastTime = poseInfo.time;
+            continue;
+        }
+
+        intervalsTotal += poseInfo.time - lastTime;
+        lastTime = poseInfo.time;
+    }
+    return lastFrame.poseInfo.time + intervalsTotal / numIntervals;
+}
+
+static std::mutex predictionMutex;
+static double predictedDt = 0;
+void getPredictedCameraPose(double time, Pose& pose, PoseInfo& poseInfo) {
+    std::lock_guard<std::mutex> posesLock(posesMutex);
+    poseInfo = cameraPoseInfo;
+    
+    // halving these differences to put prediction between last and next frame
+    double dt = time - glfwGetTime();
+    dt *= 0.5;
+
+    // assume the mouse will continue most recent movement
+    double dx = cameraPoseInfo.mouseX - lastFrame.poseInfo.mouseX;
+    double dy = cameraPoseInfo.mouseY - lastFrame.poseInfo.mouseY;
+    dx *= 0.5;
+    dy *= 0.5;
+
+    // unfortunately can't get away with doing this without a global variable
+    // so we set a global variable and lock this portion to make thread safe
+    std::lock_guard<std::mutex> lock(predictionMutex);
+    predictedDt = dt;
+
+    pose = poseFunction(cameraPose, dx, dy, dt, [](int key){
+        return pressedKeys.count(key) ? predictedDt : 0.0;
+    });
 }
 
 void shutdown() {

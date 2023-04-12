@@ -136,7 +136,8 @@ static void appCallback(GLFWwindow* window) {
     while(!glfwWindowShouldClose(window)) {
         arp::Pose pose;
         arp::PoseInfo poseInfo;
-        arp::getCameraPose(pose, poseInfo);
+        double predictedDisplayTime = arp::getPredictedDisplayTime();
+        arp::getPredictedCameraPose(predictedDisplayTime, pose, poseInfo);
 
         ///// Main image /////
 

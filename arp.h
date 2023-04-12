@@ -41,6 +41,10 @@ struct PoseInfo {
     double mouseX;
     double mouseY;
     double time;
+
+    // used for predicted poses.
+    // if prediction is not used, ignore this
+    Pose realPose;
 };
 
 /**
@@ -192,6 +196,20 @@ void updateProjection(float near, float far, float fovY, float aspectRatio);
  * Returns the pose that should be used to render the next frame
  */
 void getCameraPose(Pose& pose, PoseInfo& poseInfo);
+
+/**
+ * Returns the estimated time that the next frame will be submitted based on
+ * previous frames
+ */
+double getPredictedDisplayTime();
+
+/**
+ * Returns the pose that should be used to render the next frame
+ * 
+ * ARP will attempt to predict where the user-controlled pose will be by the
+ * time rendering is done. 
+ */
+void getPredictedCameraPose(double time, Pose& pose, PoseInfo& poseInfo);
 
 /**
  * Submits frame
