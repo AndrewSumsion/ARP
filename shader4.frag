@@ -14,7 +14,6 @@ const float Ks = 1;
 const float shininess = 200;
 
 const vec3 lightPos = vec3(0.0, -1.0, -1.0);
-const vec3 ambientColor = vec3(0.0, 0.0, 0.0);
 const vec3 specularColor = vec3(0.0, 0.0, 0.0);
 const vec3 lightColor = vec3(1.0, 1.0, 1.0);
 
@@ -22,6 +21,7 @@ const vec3 lightColor = vec3(1.0, 1.0, 1.0);
 void main() {
   vec4 texColor = texture( tex, texCoord );
   vec3 diffuseColor = vec3( texColor );
+  vec3 ambientColor = diffuseColor * 0.1;
   vec3 norms = normalize(interpolatedNormal);
   vec3 lightDirection = normalize(lightPos - vertPos);
 
