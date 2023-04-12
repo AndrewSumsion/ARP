@@ -108,7 +108,7 @@ int main(int argc, char *argv[]) {
 
 static void appCallback(GLFWwindow* window) {
     swapchain = new arp::Swapchain(640, 480, 3);
-    backgroundSwapchain = new arp::Swapchain(swapchain->width / 4, swapchain->height / 4, 3);
+    backgroundSwapchain = new arp::Swapchain(swapchain->width / 2, swapchain->height / 2, 3);
     
     std::vector<renderobject> tiles;
     
@@ -208,7 +208,7 @@ static void appCallback(GLFWwindow* window) {
         submitInfo.layers.push_back(backgroundLayer);
 
         arp::submitFrame(submitInfo);
-        double fps = 30;
+        double fps = 15;
         std::this_thread::sleep_for(std::chrono::milliseconds((int)(1000 / fps)));
     }
 
@@ -256,7 +256,7 @@ static void keyCallback(GLFWwindow* window, int key, int scancode, int action, i
 
 static void framebufferSizeCallback(GLFWwindow* window, int width, int height) {
     swapchain->resize(width, height);
-    backgroundSwapchain->resize(width / 4, height / 4);
+    backgroundSwapchain->resize(width / 2, height / 2);
 }
 
 static void windowFocusCallback(GLFWwindow* window, int focused) {
