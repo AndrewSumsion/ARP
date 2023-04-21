@@ -382,7 +382,8 @@ int startReprojection(ApplicationCallback callback) {
 }
 
 static void drawLayer(const FrameLayer& layer) {
-    if((layer.flags & PARALLAX_ENABLED) && !(layer.flags & CAMERA_LOCKED)) {
+    if((layer.flags & PARALLAX_ENABLED) && !(layer.flags & CAMERA_LOCKED) &&
+        lastFrame.pose.position != cameraPose.position) {
         drawLayerParallaxEnabled(layer);
         return;
     }
