@@ -66,9 +66,6 @@ static GLFWframebuffersizefun originalFramebufferSizeCallback;
 
 /// Rendering variables ///
 
-#define MAX_PARALLAX_ITERATIONS 64
-#define STRINGIFY(...) #__VA_ARGS__
-
 static const char* vertSrc =
     "#version 330 core\n"
     "layout(location = 0) in vec3 pos;\n"
@@ -121,7 +118,7 @@ static const char* parallaxVertSrc =
 static const char* parallaxFragSrc =
     "#version 330 core\n"
     "\n"
-    "#define MAX_PARALLAX_ITERATIONS " STRINGIFY(MAX_PARALLAX_ITERATIONS) "\n"
+    "#define MAX_PARALLAX_ITERATIONS 64\n"
     "layout(location = 0) out vec4 color;\n"
     "uniform sampler2D tex;\n"
     "uniform sampler2D depthTex;\n"
@@ -426,7 +423,6 @@ static void drawLayer(const FrameLayer& layer) {
     glBindTexture(GL_TEXTURE_2D, texture);
     glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
 }
-
 
 static void drawLayerParallaxEnabled(const FrameLayer& layer) {
     // setup transformation matrices

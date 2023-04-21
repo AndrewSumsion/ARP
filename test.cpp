@@ -57,9 +57,10 @@ static arp::Swapchain* backgroundSwapchain;
 static double aspectRatio = 1;
 static double fovY = 90 * M_PI / 180;
 
-static bool shouldReproject = true;
-static bool shouldBackground = false;
+static bool shouldReproject = false;
 static bool shouldPredict = false;
+static bool shouldBackground = false;
+static bool shouldParallax = false;
 
 int main(int argc, char *argv[]) {
     if (!glfwInit()) {
@@ -167,10 +168,12 @@ static void appCallback(GLFWwindow* window) {
         //rock1.render();
 
         arp::FrameLayer layer;
-        layer.flags = arp::PARALLAX_ENABLED;
+        layer.flags = arp::NONE;
         layer.fov = fovY;
         layer.swapchain = swapchain;
         layer.swapchainIndex = swapchainIndex;
+        if(shouldParallax)
+            layer.flags = arp::PARALLAX_ENABLED;
         if(!shouldReproject)
             layer.flags = arp::CAMERA_LOCKED;
         submitInfo.layers.push_back(layer);
@@ -255,10 +258,13 @@ static void keyCallback(GLFWwindow* window, int key, int scancode, int action, i
         shouldReproject = !shouldReproject;
     }
     if(key == GLFW_KEY_2 && action == GLFW_PRESS) {
-        shouldBackground = !shouldBackground;
+        shouldPredict = !shouldPredict;
     }
     if(key == GLFW_KEY_3 && action == GLFW_PRESS) {
-        shouldPredict = !shouldPredict;
+        shouldBackground = !shouldBackground;
+    }
+    if(key == GLFW_KEY_4 && action == GLFW_PRESS) {
+        shouldParallax = !shouldParallax;
     }
 }
 
