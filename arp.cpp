@@ -356,7 +356,7 @@ static void drawLayer(const FrameLayer& layer) {
 
     glm::mat4 model = translation * rotation * nearPlaneOffset * scale;
 
-    glm::mat4 camera = glm::translate(glm::mat4(1), cameraPose.position) * glm::mat4(cameraPose.orientation);
+    glm::mat4 camera = glm::translate(glm::mat4(1), lastFrame.pose.position) * glm::mat4(cameraPose.orientation);
     glm::mat4 view = glm::inverse(camera);
 
     glUseProgram(program);

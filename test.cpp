@@ -11,6 +11,7 @@ struct PoseData {
 #include "renderobject.h"
 
 #include <iostream>
+#include <string>
 #include <chrono>
 #include <thread>
 #include <cmath>
@@ -211,6 +212,10 @@ static void appCallback(GLFWwindow* window) {
         arp::submitFrame(submitInfo);
         double fps = 15;
         std::this_thread::sleep_for(std::chrono::milliseconds((int)(1000 / fps)));
+
+        // wait for enter
+        //std::string temp;
+        //std::getline(std::cin, temp);
     }
 
     arp::releaseCursor();
