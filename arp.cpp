@@ -227,23 +227,7 @@ void updateProjection(float near_, float far_, float fovY_, float aspectRatio_) 
     projectionFovY = fovY_;
     projectionAspect = aspectRatio_;
 
-    // the projection matrix for reprojection must have a smaller near value
-    // than the one used to render to keep the rendered plane at the correct
-    // distance while also not clipping out of the view volume.
-    // doing some geometry yields the following formula:
-    //
-    // reprojectionNear = renderNear * cos(fov / 2)
-    // where fov is the max of fovX and fovY
-    float fovY = projectionFovY;
-    float fovX = projectionAspect * projectionFovY;
-
-    float fov = fovY > fovX ? fovY : fovX;
-    // I did my math for x and y axises independently, turns out a diagonal combination of both still clips
-    // The math to properly figure this out is insane and involves a sphere so I'm just gonna fudge it
-    // A constant multiple should work on all but very large fovs
-    float near = projectionNear * cosf(fov / 2.f) * 0.5;
-    float far = projectionFar;
-    projection = glm::perspective(projectionFovY, projectionAspect, near, far);
+    projection = glm::perspective(projectionFovY, projectionAspect, projectionNear, projectionFar * 2);
 }
 
 int startReprojection(ApplicationCallback callback) {
@@ -339,11 +323,11 @@ static void drawLayer(const FrameLayer& layer) {
     float fovY = layer.fov;
     // TODO: allow layers with different aspect ratios
     float fovX = projectionAspect * fovY;
-    float xScale = projectionNear * tanf(fovX / 2.f);
-    float yScale = projectionNear * tanf(fovY / 2.f);
+    float xScale = projectionFar * tanf(fovX / 2.f);
+    float yScale = projectionFar * tanf(fovY / 2.f);
 
     glm::mat4 scale = glm::scale(glm::mat4(1), glm::vec3(xScale, yScale, 1));
-    glm::mat4 nearPlaneOffset = glm::translate(glm::mat4(1), glm::vec3(0, 0, -projectionNear));
+    glm::mat4 nearPlaneOffset = glm::translate(glm::mat4(1), glm::vec3(0, 0, -projectionFar));
     glm::mat4 translation = glm::translate(glm::mat4(1), lastFrame.pose.position);
 
     glm::mat4 rotation;
