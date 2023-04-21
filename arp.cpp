@@ -67,11 +67,12 @@ static GLFWframebuffersizefun originalFramebufferSizeCallback;
 static const char* vertSrc =
     "#version 330 core\n"
     "in vec3 pos;\n"
-    "uniform mat4 mvp;\n"
-    "uniform mat4 mv;\n"
+    "uniform mat4 model;\n"
+    "uniform mat4 view;\n"
+    "uniform mat4 projection;\n"
     "out vec2 texCoords;\n"
     "void main() {\n"
-    "    gl_Position = mvp * vec4(pos, 1);\n"
+    "    gl_Position = projection * view * model * vec4(pos, 1);\n"
     "    texCoords = (pos.xy + vec2(1, 1)) * 0.5;\n"
     "}\n"
     ;
@@ -340,25 +341,33 @@ static void drawLayer(const FrameLayer& layer) {
     float fovX = projectionAspect * fovY;
     float xScale = projectionNear * tanf(fovX / 2.f);
     float yScale = projectionNear * tanf(fovY / 2.f);
-    glm::mat4 view = glm::translate(glm::mat4(1), glm::vec3(0, 0, -projectionNear)) *
-                     glm::scale(glm::mat4(1), glm::vec3(xScale, yScale, 1));
 
-    // Only rotate if layer is not camera locked
-    glm::mat4 mv = view;
+    glm::mat4 scale = glm::scale(glm::mat4(1), glm::vec3(xScale, yScale, 1));
+    glm::mat4 nearPlaneOffset = glm::translate(glm::mat4(1), glm::vec3(0, 0, -projectionNear));
+    glm::mat4 translation = glm::translate(glm::mat4(1), lastFrame.pose.position);
+
+    glm::mat4 rotation;
     if(!(layer.flags & CAMERA_LOCKED)) {
-        // TODO: Simplify this math
-        glm::quat orientationDifference = glm::inverse(lastFrame.pose.orientation) * cameraPose.orientation;
-        mv = glm::mat4(glm::inverse(orientationDifference)) * mv;
+        rotation = glm::mat4(lastFrame.pose.orientation);
     }
+    else {
+        rotation = glm::mat4(cameraPose.orientation);
+    }
+
+    glm::mat4 model = translation * rotation * nearPlaneOffset * scale;
+
+    glm::mat4 camera = glm::translate(glm::mat4(1), cameraPose.position) * glm::mat4(cameraPose.orientation);
+    glm::mat4 view = glm::inverse(camera);
 
     glUseProgram(program);
 
     // setup uniforms
-    glm::mat4 mvp = projection * mv;
-    GLuint mvLoc = glGetUniformLocation(program, "mv");
-    glUniformMatrix4fv(mvLoc, 1, GL_FALSE, &mv[0][0]);
-    GLuint mvpLoc = glGetUniformLocation(program, "mvp");
-    glUniformMatrix4fv(mvpLoc, 1, GL_FALSE, &mvp[0][0]);
+    GLuint modelLoc = glGetUniformLocation(program, "model");
+    glUniformMatrix4fv(modelLoc, 1, GL_FALSE, &model[0][0]);
+    GLuint viewLoc = glGetUniformLocation(program, "view");
+    glUniformMatrix4fv(viewLoc, 1, GL_FALSE, &view[0][0]);
+    GLuint projLoc = glGetUniformLocation(program, "projection");
+    glUniformMatrix4fv(projLoc, 1, GL_FALSE, &projection[0][0]);
 
     // draw quad
     GLuint texture = layer.swapchain->images[layer.swapchainIndex];
