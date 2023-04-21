@@ -57,7 +57,7 @@ static arp::Swapchain* backgroundSwapchain;
 static double aspectRatio = 1;
 static double fovY = 90 * M_PI / 180;
 
-static bool shouldReproject = false;
+static bool shouldReproject = true;
 static bool shouldBackground = false;
 static bool shouldPredict = false;
 
@@ -167,7 +167,7 @@ static void appCallback(GLFWwindow* window) {
         //rock1.render();
 
         arp::FrameLayer layer;
-        layer.flags = arp::NONE;
+        layer.flags = arp::PARALLAX_ENABLED;
         layer.fov = fovY;
         layer.swapchain = swapchain;
         layer.swapchainIndex = swapchainIndex;
@@ -212,10 +212,6 @@ static void appCallback(GLFWwindow* window) {
         arp::submitFrame(submitInfo);
         double fps = 15;
         std::this_thread::sleep_for(std::chrono::milliseconds((int)(1000 / fps)));
-
-        // wait for enter
-        //std::string temp;
-        //std::getline(std::cin, temp);
     }
 
     arp::releaseCursor();

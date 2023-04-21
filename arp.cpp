@@ -26,6 +26,8 @@ static void keyCallback(GLFWwindow* window, int key, int scancode, int action, i
 static void framebufferSizeCallback(GLFWwindow* window, int width, int height);
 static void setupGL();
 static void drawLayer(const FrameLayer& layer);
+static void drawLayerParallaxEnabled(const FrameLayer& layer);
+static GLuint compileProgram(const char* vertShaderSrc, const char* fragShaderSrc);
 static void compileShader(GLuint shader, const char* source);
 static double keyTimeFunction(int key);
 
@@ -64,9 +66,12 @@ static GLFWframebuffersizefun originalFramebufferSizeCallback;
 
 /// Rendering variables ///
 
+#define MAX_PARALLAX_ITERATIONS 64
+#define STRINGIFY(...) #__VA_ARGS__
+
 static const char* vertSrc =
     "#version 330 core\n"
-    "in vec3 pos;\n"
+    "layout(location = 0) in vec3 pos;\n"
     "uniform mat4 model;\n"
     "uniform mat4 view;\n"
     "uniform mat4 projection;\n"
@@ -88,7 +93,67 @@ static const char* fragSrc =
     "}\n"
     ;
 
-GLuint program;
+/**
+ * Uniforms that need to be set:
+ * model - transform the radius-1 plane to last frame far plane
+ * view - current camera pose view
+ * projection - projection with extended far to fit plane
+ * cameraPos - current camera translation in world space
+ * frameView - the view matrix the last frame was rendered with
+ * frameProjection - the projection matrix the last frame was rendered with
+ * tex - color texture of last frame
+ * depthTex - depth texture of last frame
+ */
+static const char* parallaxVertSrc =
+    "#version 330 core\n"
+    "layout(location = 1) in vec3 pos;\n"
+    "uniform mat4 model;\n"
+    "uniform mat4 view;\n"
+    "uniform mat4 projection;\n"
+    "uniform vec3 cameraPos;\n"
+    "out vec3 cameraToFrag;\n"
+    "void main() {\n"
+    "    gl_Position = projection * view * model * vec4(pos, 1);\n"
+    "    cameraToFrag = (model * vec4(pos, 1)).xyz - cameraPos;\n"
+    "}\n"
+    ;
+
+static const char* parallaxFragSrc =
+    "#version 330 core\n"
+    "\n"
+    "#define MAX_PARALLAX_ITERATIONS " STRINGIFY(MAX_PARALLAX_ITERATIONS) "\n"
+    "layout(location = 0) out vec4 color;\n"
+    "uniform sampler2D tex;\n"
+    "uniform sampler2D depthTex;\n"
+    "uniform mat4 frameView;\n"
+    "uniform mat4 frameProjection;\n"
+    "uniform vec3 cameraPos;\n"
+    "in vec3 cameraToFrag;\n"
+    "\n"
+    "bool insideDepthMap(vec3 pos) {\n"
+    "    vec4 posProj = frameProjection * frameView * vec4(pos, 1);\n"
+    "    vec3 depthCoords = posProj.xyz / posProj.w;\n"
+    "    depthCoords = depthCoords * 0.5 + 0.5;\n"
+    "    return texture(depthTex, depthCoords.xy).r < depthCoords.z;\n"
+    "}\n"
+    "    \n"
+    "void main() {\n"
+    "    vec3 pos = cameraPos;\n"
+    "    for(int i = 0; i < MAX_PARALLAX_ITERATIONS; i++) {\n"
+    "        pos = cameraPos + ((float(i) + 1.0) / MAX_PARALLAX_ITERATIONS) * cameraToFrag;\n"
+    "        if(insideDepthMap(pos))\n"
+    "            break;\n"
+    "    }\n"
+    "\n"
+    "    //color = vec4(1 - length(pos - cameraPos) / length(cameraToFrag), 0, 0, 1);\n"
+    "    vec4 posProj = frameProjection * frameView * vec4(pos, 1);\n"
+    "    vec2 texCoords = (posProj.xy / posProj.w) * 0.5 + 0.5;\n"
+    "    color = texture(tex, texCoords);\n"
+    "}"
+    ;
+
+GLuint defaultProgram;
+GLuint parallaxProgram;
 glm::mat4 projection;
 
 Swapchain::Swapchain(int width, int height, int numImages)
@@ -320,6 +385,10 @@ int startReprojection(ApplicationCallback callback) {
 }
 
 static void drawLayer(const FrameLayer& layer) {
+    if((layer.flags & PARALLAX_ENABLED) && !(layer.flags & CAMERA_LOCKED)) {
+        drawLayerParallaxEnabled(layer);
+        return;
+    }
     float fovY = layer.fov;
     // TODO: allow layers with different aspect ratios
     float fovX = projectionAspect * fovY;
@@ -327,9 +396,8 @@ static void drawLayer(const FrameLayer& layer) {
     float yScale = projectionFar * tanf(fovY / 2.f);
 
     glm::mat4 scale = glm::scale(glm::mat4(1), glm::vec3(xScale, yScale, 1));
-    glm::mat4 nearPlaneOffset = glm::translate(glm::mat4(1), glm::vec3(0, 0, -projectionFar));
+    glm::mat4 farPlaneOffset = glm::translate(glm::mat4(1), glm::vec3(0, 0, -projectionFar));
     glm::mat4 translation = glm::translate(glm::mat4(1), lastFrame.pose.position);
-
     glm::mat4 rotation;
     if(!(layer.flags & CAMERA_LOCKED)) {
         rotation = glm::mat4(lastFrame.pose.orientation);
@@ -338,24 +406,80 @@ static void drawLayer(const FrameLayer& layer) {
         rotation = glm::mat4(cameraPose.orientation);
     }
 
-    glm::mat4 model = translation * rotation * nearPlaneOffset * scale;
+    glm::mat4 model = translation * rotation * farPlaneOffset * scale;
 
     glm::mat4 camera = glm::translate(glm::mat4(1), lastFrame.pose.position) * glm::mat4(cameraPose.orientation);
     glm::mat4 view = glm::inverse(camera);
 
-    glUseProgram(program);
+    glUseProgram(defaultProgram);
 
     // setup uniforms
-    GLuint modelLoc = glGetUniformLocation(program, "model");
+    GLuint modelLoc = glGetUniformLocation(defaultProgram, "model");
     glUniformMatrix4fv(modelLoc, 1, GL_FALSE, &model[0][0]);
-    GLuint viewLoc = glGetUniformLocation(program, "view");
+    GLuint viewLoc = glGetUniformLocation(defaultProgram, "view");
     glUniformMatrix4fv(viewLoc, 1, GL_FALSE, &view[0][0]);
-    GLuint projLoc = glGetUniformLocation(program, "projection");
+    GLuint projLoc = glGetUniformLocation(defaultProgram, "projection");
     glUniformMatrix4fv(projLoc, 1, GL_FALSE, &projection[0][0]);
 
     // draw quad
     GLuint texture = layer.swapchain->images[layer.swapchainIndex];
     glBindTexture(GL_TEXTURE_2D, texture);
+    glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
+}
+
+
+static void drawLayerParallaxEnabled(const FrameLayer& layer) {
+    // setup transformation matrices
+    float fovY = layer.fov;
+    float fovX = projectionAspect * fovY;
+    float xScale = projectionFar * tanf(fovX / 2.f);
+    float yScale = projectionFar * tanf(fovY / 2.f);
+
+    glm::mat4 scale = glm::scale(glm::mat4(1), glm::vec3(xScale, yScale, 1));
+    glm::mat4 farPlaneOffset = glm::translate(glm::mat4(1), glm::vec3(0, 0, -projectionFar));
+    glm::mat4 translation = glm::translate(glm::mat4(1), lastFrame.pose.position);
+    glm::mat4 rotation = glm::mat4(lastFrame.pose.orientation);
+
+    glm::mat4 model = translation * rotation * farPlaneOffset * scale;
+
+    glm::mat4 camera = glm::translate(glm::mat4(1), cameraPose.position) * glm::mat4(cameraPose.orientation);
+    glm::mat4 view = glm::inverse(camera);
+
+    glm::mat4 frameCamera = glm::translate(glm::mat4(1), lastFrame.pose.position) * glm::mat4(lastFrame.pose.orientation);
+    glm::mat4 frameView = glm::inverse(frameCamera);
+    glm::mat4 frameProjection = glm::perspective(projectionFovY, projectionAspect, projectionNear, projectionFar);
+
+    // update uniforms
+    glUseProgram(parallaxProgram);
+
+    GLuint modelLoc = glGetUniformLocation(parallaxProgram, "model");
+    glUniformMatrix4fv(modelLoc, 1, GL_FALSE, &model[0][0]);
+    GLuint viewLoc = glGetUniformLocation(parallaxProgram, "view");
+    glUniformMatrix4fv(viewLoc, 1, GL_FALSE, &view[0][0]);
+    GLuint projectionLoc = glGetUniformLocation(parallaxProgram, "projection");
+    glUniformMatrix4fv(projectionLoc, 1, GL_FALSE, &projection[0][0]);
+    GLuint cameraPosLoc = glGetUniformLocation(parallaxProgram, "cameraPos");
+    glUniform3fv(cameraPosLoc, 1, &cameraPose.position[0]);
+    GLuint frameViewLoc = glGetUniformLocation(parallaxProgram, "frameView");
+    glUniformMatrix4fv(frameViewLoc, 1, GL_FALSE, &frameView[0][0]);
+    GLuint frameProjectionLoc = glGetUniformLocation(parallaxProgram, "frameProjection");
+    glUniformMatrix4fv(frameProjectionLoc, 1, GL_FALSE, &frameProjection[0][0]);
+    GLuint texLoc = glGetUniformLocation(parallaxProgram, "tex");
+    glUniform1i(texLoc, 0);
+    GLuint depthTexLoc = glGetUniformLocation(parallaxProgram, "depthTex");
+    glUniform1i(depthTexLoc, 1);
+
+    // bind textures
+    GLuint tex = layer.swapchain->images[layer.swapchainIndex];
+    GLuint depthTex = layer.swapchain->depthImages[layer.swapchainIndex];
+
+    glActiveTexture(GL_TEXTURE0);
+    glBindTexture(GL_TEXTURE_2D, tex);
+    glActiveTexture(GL_TEXTURE1);
+    glBindTexture(GL_TEXTURE_2D, depthTex);
+    glActiveTexture(GL_TEXTURE0);
+
+    // draw
     glDrawArrays(GL_TRIANGLE_STRIP, 0, 4);
 }
 
@@ -489,17 +613,33 @@ static void setupGL() {
     glGenBuffers(1, &vbo);
     glBindBuffer(GL_ARRAY_BUFFER, vbo);
     glBufferData(GL_ARRAY_BUFFER, sizeof(vertexData), vertexData, GL_STATIC_DRAW);
+    
+    defaultProgram = compileProgram(vertSrc, fragSrc);
+
+    GLint posLoc = glGetAttribLocation(defaultProgram, "pos");
+    glEnableVertexAttribArray(posLoc);
+    glVertexAttribPointer(posLoc, 3, GL_FLOAT, GL_FALSE, 0, (GLvoid*)0);
+
+    parallaxProgram = compileProgram(parallaxVertSrc, parallaxFragSrc);
+    posLoc = glGetAttribLocation(parallaxProgram, "pos");
+    glEnableVertexAttribArray(posLoc);
+    glVertexAttribPointer(posLoc, 3, GL_FLOAT, GL_FALSE, 0, (GLvoid*)0);
+
+}
+
+static GLuint compileProgram(const char* vertShaderSrc, const char* fragShaderSrc) {
+    GLuint program = glCreateProgram();
 
     GLuint vertexShader = glCreateShader(GL_VERTEX_SHADER);
-    compileShader(vertexShader, vertSrc);
+    compileShader(vertexShader, vertShaderSrc);
 
     GLuint fragmentShader = glCreateShader(GL_FRAGMENT_SHADER);
-    compileShader(fragmentShader, fragSrc);
-    
-    program = glCreateProgram();
+    compileShader(fragmentShader, fragShaderSrc);
+
     glAttachShader(program, vertexShader);
     glAttachShader(program, fragmentShader);
     glLinkProgram(program);
+
     GLint isLinked = GL_FALSE;
     glGetProgramiv(program, GL_LINK_STATUS, &isLinked);
     if(!isLinked) {
@@ -511,15 +651,12 @@ static void setupGL() {
 
         std::cout << "Error: failed to link program" << std::endl;
         std::cout << infoLog.data() << std::endl;
-        return;
+        return 0;
     }
     glDeleteShader(vertexShader);
     glDeleteShader(fragmentShader);
 
-    GLint posLoc = glGetAttribLocation(program, "pos");
-    glEnableVertexAttribArray(posLoc);
-    glVertexAttribPointer(posLoc, 3, GL_FLOAT, GL_FALSE, 0, (GLvoid*)0);
-
+    return program;
 }
 
 static void compileShader(GLuint shader, const char* source) {
