@@ -1,10 +1,13 @@
 #include <GL/glew.h>
 #include "cyGL.h"
 #include "cyTriMesh.h"
+#include <glm/glm.hpp>
+#include <glm/ext.hpp>
 
 struct PoseData {
     double rotationX;
     double rotationY;
+    glm::vec3 centerPos;
 };
 #define ARP_CUSTOM_POSE_DATA
 #include "arp.h"
@@ -222,18 +225,18 @@ static void appCallback(GLFWwindow* window) {
 
 static double positionSpeed = 10;
 static double rotationSpeed = -0.001;
+static double orbitDistance = 10;
 
 static arp::Pose poseFunction(
     const arp::Pose& lastPose, double dx, double dy, double dt,
     arp::KeyTimeFunction keyTime) {
 
     arp::Pose result;
+    result.data = lastPose.data;
 
-    result.data.rotationX = lastPose.data.rotationX + rotationSpeed * dy;
-    result.data.rotationY = lastPose.data.rotationY + rotationSpeed * dx;
+    result.data.rotationX += rotationSpeed * dy;
+    result.data.rotationY += rotationSpeed * dx;
     result.orientation = glm::quat(glm::vec3(0, result.data.rotationY, 0)) * glm::quat(glm::vec3(result.data.rotationX, 0, 0));
-
-    result.position = lastPose.position;
     
     glm::vec3 movement(0);
     movement.x += positionSpeed * keyTime(GLFW_KEY_D);
@@ -242,10 +245,12 @@ static arp::Pose poseFunction(
     movement.z -= positionSpeed * keyTime(GLFW_KEY_W);
     
     movement = glm::rotate(glm::mat4(1), (float)result.data.rotationY, glm::vec3(0.f, 1.f, 0.f)) * glm::vec4(movement, 1);
-    result.position += movement;
+    result.data.centerPos += movement;
 
-    result.position.y += positionSpeed * keyTime(GLFW_KEY_SPACE);
-    result.position.y -= positionSpeed * keyTime(GLFW_KEY_LEFT_SHIFT);
+    result.data.centerPos.y += positionSpeed * keyTime(GLFW_KEY_SPACE);
+    result.data.centerPos.y -= positionSpeed * keyTime(GLFW_KEY_LEFT_SHIFT);
+
+    result.position = result.data.centerPos + result.orientation * glm::vec3(0, 0, orbitDistance);
 
     return result;
 }
