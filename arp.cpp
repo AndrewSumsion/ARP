@@ -299,6 +299,7 @@ int startReprojection(ApplicationCallback callback) {
     }
 
     window = glfwGetCurrentContext();
+    glfwSwapInterval(1);
 
     cameraPose.position = glm::vec3(0, 0, 0);
     cameraPose.orientation = glm::quat(1, 0, 0, 0);
