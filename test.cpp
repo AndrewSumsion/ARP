@@ -97,6 +97,7 @@ int main(int argc, char *argv[]) {
     }
 
     arp::registerPoseFunction(poseFunction);
+    aspectRatio = 640.0 / 480.0;
     arp::updateProjection(0.1, 100, fovY, aspectRatio);
     arp::startReprojection(appCallback);
 
@@ -271,6 +272,8 @@ static void keyCallback(GLFWwindow* window, int key, int scancode, int action, i
 static void framebufferSizeCallback(GLFWwindow* window, int width, int height) {
     swapchain->resize(width, height);
     backgroundSwapchain->resize(width / 2, height / 2);
+    aspectRatio = (double)width / (double)height;
+    arp::updateProjection(0.1, 100, fovY, aspectRatio);
 }
 
 static void windowFocusCallback(GLFWwindow* window, int focused) {

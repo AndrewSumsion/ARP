@@ -390,9 +390,8 @@ static void drawLayer(const FrameLayer& layer) {
     }
     float fovY = layer.fov;
     // TODO: allow layers with different aspect ratios
-    float fovX = projectionAspect * fovY;
-    float xScale = projectionFar * tanf(fovX / 2.f);
     float yScale = projectionFar * tanf(fovY / 2.f);
+    float xScale = projectionAspect * yScale;
 
     glm::mat4 scale = glm::scale(glm::mat4(1), glm::vec3(xScale, yScale, 1));
     glm::mat4 farPlaneOffset = glm::translate(glm::mat4(1), glm::vec3(0, 0, -projectionFar));
@@ -429,9 +428,8 @@ static void drawLayer(const FrameLayer& layer) {
 static void drawLayerParallaxEnabled(const FrameLayer& layer) {
     // setup transformation matrices
     float fovY = layer.fov;
-    float fovX = projectionAspect * fovY;
-    float xScale = projectionFar * tanf(fovX / 2.f);
     float yScale = projectionFar * tanf(fovY / 2.f);
+    float xScale = projectionAspect * yScale;
 
     glm::mat4 scale = glm::scale(glm::mat4(1), glm::vec3(xScale, yScale, 1));
     glm::mat4 farPlaneOffset = glm::translate(glm::mat4(1), glm::vec3(0, 0, -projectionFar));
