@@ -77,7 +77,7 @@ int main(int argc, char *argv[]) {
     glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GL_TRUE);
     glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
     
-    GLFWwindow* window = glfwCreateWindow(640, 480, "ARP Test", NULL, NULL);
+    GLFWwindow* window = glfwCreateWindow(1920, 1080, "ARP Demo", NULL, NULL);
     if (!window) {
         std::cout << "Unable to create window" << std::endl;
         return -1;
@@ -100,7 +100,7 @@ int main(int argc, char *argv[]) {
     }
 
     arp::registerPoseFunction(poseFunction);
-    aspectRatio = 640.0 / 480.0;
+    aspectRatio = 1920.0 / 1080.0;
     arp::updateProjection(0.1, 100, fovY, aspectRatio);
     arp::startReprojection(appCallback);
 
@@ -108,7 +108,7 @@ int main(int argc, char *argv[]) {
 }
 
 static void appCallback(GLFWwindow* window) {
-    swapchain = new arp::Swapchain(640, 480, 3);
+    swapchain = new arp::Swapchain(1920, 1080, 3);
     backgroundSwapchain = new arp::Swapchain(swapchain->width / 2, swapchain->height / 2, 3);
     
     std::vector<renderobject> tiles;
