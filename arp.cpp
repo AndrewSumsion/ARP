@@ -3,6 +3,9 @@
 #include <GL/glew.h>
 #include <GLFW/glfw3.h>
 #include "glm/glm.hpp"
+#include "imgui.h"
+#include "imgui_impl_glfw.h"
+#include "imgui_impl_opengl3.h"
 
 #include <thread>
 #include <chrono>
@@ -63,6 +66,19 @@ static std::unordered_set<int> pressedKeys;
 
 static GLFWkeyfun originalKeyCallback;
 static GLFWframebuffersizefun originalFramebufferSizeCallback;
+
+const char* glsl_version = "#version 330";
+bool showUI = true;
+
+
+bool reprojectionToggle = true;
+bool backgroundToggle = false;
+bool parallaxToggle = false;
+bool predictionToggle = false;
+bool freezeRendering = false;
+
+int targetFPS = 15;
+
 
 /// Rendering variables ///
 
@@ -289,7 +305,7 @@ void updateProjection(float near_, float far_, float fovY_, float aspectRatio_) 
     projectionFovY = fovY_;
     projectionAspect = aspectRatio_;
 
-    projection = glm::perspective(projectionFovY, projectionAspect, projectionNear, projectionFar * 2);
+    projection = glm::perspective(projectionFovY, projectionAspect, projectionNear, projectionFar * 3);
 }
 
 int startReprojection(ApplicationCallback callback) {
@@ -313,6 +329,20 @@ int startReprojection(ApplicationCallback callback) {
     glfwWindowHint(GLFW_VISIBLE, GLFW_FALSE);
     hiddenWindow = glfwCreateWindow(1, 1, "", NULL, window);
     glfwWindowHint(GLFW_VISIBLE, GLFW_TRUE);
+    
+    IMGUI_CHECKVERSION();
+    ImGui::CreateContext();
+    ImGuiIO& io = ImGui::GetIO(); (void)io;
+    io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;     // Enable Keyboard Controls
+    io.ConfigFlags |= ImGuiConfigFlags_NavEnableGamepad;      // Enable Gamepad Controls
+
+    // Setup Dear ImGui style
+    ImGui::StyleColorsDark();
+
+    // Setup Platform/Renderer backends
+    ImGui_ImplGlfw_InitForOpenGL(window, true);
+    ImGui_ImplOpenGL3_Init(glsl_version);
+    
     // start app thread
     reprojectionThread = std::thread(appThreadStarter, callback);
 
@@ -323,8 +353,33 @@ int startReprojection(ApplicationCallback callback) {
 
     // absolute time value used for tracking frame time
     double frameStartTime = glfwGetTime();
+    
+    ImVec4 clear_color = ImVec4(0.45f, 0.55f, 0.60f, 1.00f);
 
     while(!glfwWindowShouldClose(window)) {
+        ImGui_ImplOpenGL3_NewFrame();
+        ImGui_ImplGlfw_NewFrame();
+        ImGui::NewFrame();
+
+        {
+            ImGui::Begin("Options");
+
+            ImGui::Text("so many choices");
+            ImGui::Checkbox("Reprojection", &reprojectionToggle);
+            ImGui::Checkbox("Prediction", &predictionToggle);
+            ImGui::Checkbox("Background", &backgroundToggle);
+            ImGui::Checkbox("Parallax", &parallaxToggle);
+            
+            if (ImGui::Button("Freeze"))
+                freezeRendering = !freezeRendering;
+
+            ImGui::SliderInt("target framerate", &targetFPS, 0, 240);
+
+            ImGui::Text("Application average %.3f ms/frame (%.1f FPS)", 1000.0f / io.Framerate, io.Framerate);
+            ImGui::End();
+        }
+        //ImGui::ShowDemoWindow(&showUI);
+        
         if(cursorCaptured) {
             glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
         }
@@ -370,6 +425,9 @@ int startReprojection(ApplicationCallback callback) {
                 for(int i = lastFrame.layers.size() - 1; i >= 0; i--)
                     drawLayer(lastFrame.layers[i]);
         }
+        
+        ImGui::Render();
+        ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
 
         glfwSwapBuffers(window);
         glfwPollEvents();
@@ -380,6 +438,36 @@ int startReprojection(ApplicationCallback callback) {
     reprojectionThread.join();
 
     return 0;
+}
+
+int arp::getTargetFramerate()
+{
+    return targetFPS;
+}
+
+bool arp::getParallaxToggle()
+{
+    return parallaxToggle;
+}
+
+bool arp::getPredictionToggle()
+{
+    return predictionToggle;
+}
+
+bool arp::getReprojectionToggle()
+{
+    return reprojectionToggle;
+}
+
+bool arp::getBackgroundToggle()
+{
+    return backgroundToggle;
+}
+
+bool arp::getFrozen()
+{
+    return freezeRendering;
 }
 
 static void drawLayer(const FrameLayer& layer) {

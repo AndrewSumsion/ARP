@@ -221,6 +221,13 @@ void submitFrame(const FrameSubmitInfo& submitInfo);
  */
 void shutdown();
 
+int getTargetFramerate();
+bool getParallaxToggle();
+bool getReprojectionToggle();
+bool getBackgroundToggle();
+bool getPredictionToggle();
+bool getFrozen();
+
 };
 
 #endif // ARP_H
